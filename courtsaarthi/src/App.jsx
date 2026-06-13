@@ -142,11 +142,80 @@ const INITIAL_MATTERS = [
 
 const TOOLS = [
   { id: "summarize_extract", icon: FileText, name: "Summarize & Extract Details", desc: "Scan files to create a short summary and automatically pull case numbers, parties, and dates" },
-  { id: "deadlines", icon: CalendarDays, name: "Calculate deadlines", desc: "Work out due dates and alerts based on standard rules" },
   { id: "client", icon: Languages, name: "Update client", desc: "Write updates in English and translate them to client's language" },
   { id: "dictate", icon: Mic, name: "Dictate note", desc: "Talk to record notes. Mix English & Hindi naturally to get typed text" },
   { id: "search_cases", icon: Search, name: "Search similar cases", desc: "Look up past cases to see their details and how they ended" },
+  { id: "deadlines", icon: Calendar, name: "Deadline", desc: "Type or paste case updates to extract details, schedule events, and alert clients automatically" },
 ];
+
+// --- Mock Groq AI Helper ---
+async function callGroq(prompt) {
+  // Simulating Groq AI completion latency
+  await new Promise(r => setTimeout(r, 1500));
+  
+  const text = prompt.toLowerCase();
+  
+  let date = "2025-07-25"; // default
+  let eventType = "Hearing";
+  let time = null;
+  let location = null;
+  let clientAction = null;
+  
+  // Try matching date like DD Month YYYY or YYYY-MM-DD or Month DD, YYYY
+  const dateMatch = text.match(/(\d{1,2})?\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*(\d{4})/);
+  if (dateMatch) {
+    const day = dateMatch[1] ? dateMatch[1].padStart(2, "0") : "18";
+    const monthStr = dateMatch[2];
+    const year = dateMatch[3];
+    const months = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
+    date = `${year}-${months[monthStr]}-${day}`;
+  } else {
+    // Try YYYY-MM-DD
+    const isoMatch = text.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) date = isoMatch[0];
+  }
+  
+  // Try matching time
+  const timeMatch = text.match(/(\d{1,2}(:\d{2})?\s*(am|pm))/);
+  if (timeMatch) time = timeMatch[0].toUpperCase();
+  
+  // Try matching location (strictly find actual court names, return null if vague or plain 'court')
+  const locMatch = text.match(/\b([a-z0-9\-']+\s+){0,3}(sessions court|family court|civil court|high court|city civil court|district court|court)\b/i);
+  if (locMatch) {
+    let matched = locMatch[0].trim();
+    while (true) {
+      const cleaned = matched.replace(/^(in|at|the|for|on|to|a|an|of|is|listed|here|am|pm|\d{1,2}(:\d{2})?(am|pm)?|\d+)\s+/i, "");
+      if (cleaned === matched) break;
+      matched = cleaned;
+    }
+    if (matched.toLowerCase() === "court" || matched.toLowerCase() === "the court" || matched.toLowerCase() === "a court") {
+      location = null;
+    } else {
+      location = matched.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+    }
+  }
+  
+  // Try matching client actions
+  if (text.includes("submit") || text.includes("bring") || text.includes("present") || text.includes("provide")) {
+    const actionMatch = text.match(/(submit|bring|present|provide)[^.]*/);
+    if (actionMatch) {
+      clientAction = actionMatch[0].trim().replace(/^\w/, c => c.toUpperCase());
+    }
+  }
+  
+  if (text.includes("bail")) eventType = "Bail Hearing";
+  else if (text.includes("argument")) eventType = "Arguments";
+  else if (text.includes("evidence")) eventType = "Evidence Listing";
+  else if (text.includes("judgment") || text.includes("decree")) eventType = "Judgment Pronouncement";
+  
+  return JSON.stringify({
+    eventType,
+    date,
+    time,
+    location,
+    clientAction
+  });
+}
 
 const TYPE_TAGS = {
   criminal: { bg: "rgba(168, 61, 34, 0.15)", fg: "var(--alert-red)", label: "Criminal" },
@@ -161,6 +230,94 @@ const RISK_STYLES = {
   directory: { bg: "var(--alert-yellow-bg)", fg: "var(--alert-yellow)", label: "Directory" },
   prep: { bg: "var(--alert-green-bg)", fg: "var(--alert-green)", label: "Prep" },
 };
+
+function getFallbackTranslation(text, language) {
+  if (language === "English") return text;
+  
+  let translated = text;
+  
+  if (language === "Hindi") {
+    translated = translated
+      .replace(/Your next hearing is on/gi, "आपकी अगली सुनवाई")
+      .replace(/Your bail hearing has been/gi, "आपकी जमानत सुनवाई")
+      .replace(/listed in front of/gi, "सूचीबद्ध की गई है सामने")
+      .replace(/Please arrive by/gi, "कृपया पहुंचें")
+      .replace(/with your/gi, "अपने साथ")
+      .replace(/at the/gi, "पर")
+      .replace(/at/gi, "बजे")
+      .replace(/on/gi, "को")
+      .replace(/Please/gi, "कृपया")
+      .replace(/hearing/gi, "सुनवाई")
+      .replace(/court/gi, "न्यायालय")
+      .replace(/sessions court/gi, "सत्र न्यायालय")
+      .replace(/family court/gi, "पारिवारिक न्यायालय")
+      .replace(/civil court/gi, "सिविल न्यायालय")
+      .replace(/high court/gi, "उच्च न्यायालय");
+    return `[हिंदी अनुवाद]: ${translated}`;
+  }
+  
+  if (language === "Telugu") {
+    translated = translated
+      .replace(/Your next hearing is on/gi, "మీ తదుపరి విచారణ తేదీ")
+      .replace(/Your bail hearing has been/gi, "మీ బెయిల్ విచారణ")
+      .replace(/listed in front of/gi, "లిస్ట్ చేయబడింది")
+      .replace(/Please arrive by/gi, "దయచేసి హాజరుకావాలి")
+      .replace(/with your/gi, "మీ")
+      .replace(/at the/gi, "వద్ద")
+      .replace(/at/gi, "సమయానికి")
+      .replace(/on/gi, "న")
+      .replace(/Please/gi, "దయచేసి")
+      .replace(/hearing/gi, "విచారణ")
+      .replace(/court/gi, "కోర్టు")
+      .replace(/sessions court/gi, "సెషన్స్ కోర్టు")
+      .replace(/family court/gi, "ఫ్యామిలీ కోర్టు")
+      .replace(/civil court/gi, "సివిల్ కోర్టు")
+      .replace(/high court/gi, "హైకోర్టు");
+    return `[తెలుగు అనువాదం]: ${translated}`;
+  }
+  
+  if (language === "Urdu") {
+    translated = translated
+      .replace(/Your next hearing is on/gi, "آپ کی اگلی سماعت")
+      .replace(/Your bail hearing has been/gi, "آپ کی ضمانت کی سماعت")
+      .replace(/listed in front of/gi, "کے سامنے پیش کی گئی ہے")
+      .replace(/Please arrive by/gi, "براہ کرم پہنچیں")
+      .replace(/with your/gi, "اپنے ساتھ")
+      .replace(/at the/gi, "پر")
+      .replace(/at/gi, "بجے")
+      .replace(/on/gi, "کو")
+      .replace(/Please/gi, "براہ کرم")
+      .replace(/hearing/gi, "سماعت")
+      .replace(/court/gi, "عدالت")
+      .replace(/sessions court/gi, "سیشن کورٹ")
+      .replace(/family court/gi, "فیملی کورٹ")
+      .replace(/civil court/gi, "سیول کورٹ")
+      .replace(/high court/gi, "ہائی کورٹ");
+    return `[اردو ترجمہ]: ${translated}`;
+  }
+  
+  if (language === "Tamil") {
+    translated = translated
+      .replace(/Your next hearing is on/gi, "உங்களின் அடுத்த விசாரணை")
+      .replace(/Your bail hearing has been/gi, "உங்களின் ஜாமீன் விசாரணை")
+      .replace(/listed in front of/gi, "பட்டியலிடப்பட்டுள்ளது")
+      .replace(/Please arrive by/gi, "தயவுசெய்து வரவும்")
+      .replace(/with your/gi, "உங்களுடன்")
+      .replace(/at the/gi, "இல்")
+      .replace(/at/gi, "மணிக்கு")
+      .replace(/on/gi, "அன்று")
+      .replace(/Please/gi, "தயவுசெய்து")
+      .replace(/hearing/gi, "விசாரணை")
+      .replace(/court/gi, "நீதிமன்றம்")
+      .replace(/sessions court/gi, "செஷன்ஸ் நீதிமன்றம்")
+      .replace(/family court/gi, "குடும்ப நீதிமன்றம்")
+      .replace(/civil court/gi, "சிவில் நீதிமன்றம்")
+      .replace(/high court/gi, "உயர் நீதிமன்றம்");
+    return `[தமிழ் மொழிபெயர்ப்பு]: ${translated}`;
+  }
+  
+  return text;
+}
 
 export default function App() {
   const [cases, setCases] = useState(() => {
@@ -253,16 +410,17 @@ export default function App() {
   return (
     <div style={{ display: "flex", width: "100%", height: "100%", overflow: "hidden" }}>
       {/* Sidebar Navigation */}
-      <aside style={{
-        width: 250,
-        background: "var(--bg-sidebar)",
-        color: "var(--text-light)",
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "space-between",
-        borderRight: "1px solid var(--border-color)",
-        flexShrink: 0
-      }}>
+      {activeTab !== "document_analysis" && (
+        <aside style={{
+          width: 250,
+          background: "var(--bg-sidebar)",
+          color: "var(--text-light)",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          borderRight: "1px solid var(--border-color)",
+          flexShrink: 0
+        }}>
         <div>
           {/* Logo */}
           <div style={{
@@ -373,6 +531,7 @@ export default function App() {
           </button>
         </div>
       </aside>
+      )}
 
       {/* Main Panel */}
       <main style={{
@@ -383,6 +542,7 @@ export default function App() {
         overflow: "hidden"
       }}>
         {/* Top Header */}
+        {activeTab !== "document_analysis" && (
         <header style={{
           height: 70,
           background: "var(--bg-card)",
@@ -430,6 +590,7 @@ export default function App() {
             </button>
           </div>
         </header>
+        )}
 
         {/* Tab Content Router */}
         <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
@@ -440,7 +601,17 @@ export default function App() {
                     setCases(cases.filter(c => c.id !== id));
                   }
                 }} />
-              : <CaseDetail matter={selectedMatter} onBack={() => setOpenId(null)} setCases={setCases} cases={cases} onOpenDetail={setOpenId} />
+              : <CaseDetail 
+                  matter={selectedMatter} 
+                  onBack={() => setOpenId(null)} 
+                  setCases={setCases} 
+                  cases={cases} 
+                  onOpenDetail={setOpenId} 
+                  onOpenDocumentAnalysis={(caseId) => {
+                    setOpenId(caseId);
+                    setActiveTab("document_analysis");
+                  }}
+                />
           )}
 
           {activeTab === "calendar" && <CalendarView cases={cases} onOpenCase={(id) => { setActiveTab("cases"); setOpenId(id); }} />}
@@ -448,6 +619,13 @@ export default function App() {
           {activeTab === "client" && <ClientUpdatesView cases={cases} />}
 
           {activeTab === "settings" && <SettingsView />}
+
+          {activeTab === "document_analysis" && (
+            <DocumentAnalysisView 
+              matter={selectedMatter} 
+              onBack={() => setActiveTab("cases")} 
+            />
+          )}
         </div>
       </main>
 
@@ -906,7 +1084,7 @@ function StatsCard({ label, val, desc, icon: Icon, color }) {
 }
 
 // --- Case Detail Page (Click to Reveal Folder Box Design) ---
-function CaseDetail({ matter, onBack, setCases, cases }) {
+function CaseDetail({ matter, onBack, setCases, cases, onOpenDetail, onOpenDocumentAnalysis }) {
   const [openFolder, setOpenFolder] = useState(null); // null, 'brief', 'deadlines', 'documents', 'notes', 'ai-tools'
   const [activeTool, setActiveTool] = useState(null);
   
@@ -1359,7 +1537,7 @@ function CaseDetail({ matter, onBack, setCases, cases }) {
                   padding: "24px",
                   textAlign: "center",
                   cursor: "pointer"
-                }} onClick={() => { setOpenFolder("ai-tools"); setActiveTool({ id: "summarize", icon: FileText, name: "Summarize document" }); }}>
+                }} onClick={() => onOpenDocumentAnalysis(matter.id)}>
                   <UploadCloud size={28} color="var(--text-muted)" style={{ margin: "0 auto 8px" }} />
                   <h4 style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text-main)", marginBottom: 4 }}>Drag and drop court brief filings or scans</h4>
                   <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>Supports PDF, DOCX, scan images up to 10MB.</p>
@@ -1389,7 +1567,7 @@ function CaseDetail({ matter, onBack, setCases, cases }) {
                         <button 
                           className="btn-secondary" 
                           style={{ padding: "4px 8px", fontSize: 10 }}
-                          onClick={() => { setOpenFolder("ai-tools"); setActiveTool({ id: "summarize", icon: FileText, name: "Summarize document" }); }}
+                          onClick={() => onOpenDocumentAnalysis(matter.id)}
                         >
                           Extract Brief
                         </button>
@@ -1486,7 +1664,13 @@ function CaseDetail({ matter, onBack, setCases, cases }) {
                     return (
                       <div 
                         key={t.id} 
-                        onClick={() => setActiveTool(t)}
+                        onClick={() => {
+                          if (t.id === "summarize_extract") {
+                            onOpenDocumentAnalysis(matter.id);
+                          } else {
+                            setActiveTool(t);
+                          }
+                        }}
                         style={{
                           background: "var(--bg-app)",
                           border: "1px solid var(--border-color)",
@@ -1603,6 +1787,15 @@ function CaseDetail({ matter, onBack, setCases, cases }) {
             });
             setCases(updatedCases);
           }}
+          onTriggerClientTranslation={(text) => {
+            const clientTool = TOOLS.find(t => t.id === "client");
+            if (clientTool) {
+              setActiveTool({
+                ...clientTool,
+                prefilledText: text
+              });
+            }
+          }}
         />
       )}
     </div>
@@ -1700,7 +1893,7 @@ function SectionLabel({ children }) {
 }
 
 // --- ToolPanel Interactive Panel (AI Simulations) ---
-function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtractedDetails, onAddClientUpdate }) {
+function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtractedDetails, onAddClientUpdate, onTriggerClientTranslation }) {
   const [toolState, setToolState] = useState("idle"); // idle, loading, complete
   
   // States for specific tools
@@ -1730,6 +1923,11 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
   // Search Past Cases States
   const [searchCaseQuery, setSearchCaseQuery] = useState("");
 
+  // Smart Hearing Entry States
+  const [smartText, setSmartText] = useState("");
+  const [smartExtracted, setSmartExtracted] = useState(null);
+  const [smartDraftedMessage, setSmartDraftedMessage] = useState("");
+
   const Icon = tool.icon;
 
   // Cleanup timers
@@ -1740,54 +1938,94 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
     };
   }, []);
 
+  // Sync pre-filled text on tool change
+  useEffect(() => {
+    setToolState("idle");
+    setTranslatedText("");
+    if (tool.id === "client") {
+      const initialText = tool.prefilledText || `Your bail hearing has been successfully listed in front of Judge Rao at the Hyderabad Sessions Court for 18 July 2025. Please arrive by 10 AM with your physical Aadhaar card and salary slip.`;
+      setClientUpdateEnglish(initialText);
+      
+      // Auto-trigger translation simulation if it is a prefilled message handoff
+      if (tool.prefilledText) {
+        setToolState("loading");
+        const timer = setTimeout(() => {
+          setToolState("complete");
+          const isCanned = initialText.includes("18 July 2025") || initialText.includes("18 జూలై 2025") || initialText.includes("18 जुलाई 2025");
+          if (isCanned) {
+            const translations = {
+              Hindi: `आपका जमानत आवेदन 18 जुलाई 2025 को हैदराबाद सत्र न्यायालय में न्यायाधीश राव के समक्ष सूचीबद्ध किया गया है। कृपया अपने मूल आधार कार्ड और वेतन पर्ची के साथ सुबह 10 बजे तक पहुंचें।`,
+              Telugu: `మీ బెయిల్ పిటిషన్ 18 జూలై 2025 న హైదరాబాద్ సెషన్స్ కోర్టులో జడ్జి రావు గారి ఎదుట లిస్ట్ చేయబడింది. దయచేసి మీ ఒరిజినల్ ఆధార్ కార్డు మరియు జీతం స్లిప్ తో ఉదయం 10 గంటలకల్లా హాజరుకావాలి.`,
+              Urdu: `آپ کی ضمانت کی سماعت 18 جولائی 2025 کو حیدرآباد سیشن کورٹ میں جج راؤ کے سامنے درج کی گئی ہے۔ براہ کرم صبح 10 بجے تک اپنے اصلی آدھار کارڈ اور تنخواہ کی پرچی کے ساتھ پہنچیں۔`,
+              Tamil: `உங்கள் ஜாமீன் மனு ஜூலை 18, 2025 அன்று ஹைதராபாத் செஷன்ஸ் நீதிமன்றத்தில் நீதிபதி ராவ் முன்னிலையில் பட்டியliடப்பட்டுள்ளது. தயவுசெய்து உங்கள் அசல் ஆதார் அட்டை மற்றும் சம்பள சீட்டுடன் காலை 10 மணிக்குள் வரவும்.`,
+              English: initialText
+            };
+            setTranslatedText(translations[clientLanguage] || translations["Hindi"]);
+          } else {
+            setTranslatedText(getFallbackTranslation(initialText, clientLanguage));
+          }
+        }, 1000);
+        return () => clearTimeout(timer);
+      }
+    }
+    if (tool.id === "deadlines") {
+      setSmartText("");
+      setSmartExtracted(null);
+      setSmartDraftedMessage("");
+    }
+  }, [tool]);
+
   // Run AI Simulation
-  const handleLaunchTool = () => {
+  const handleLaunchTool = async () => {
     setToolState("loading");
     
-    // Simulate API delay
+    if (tool.id === "deadlines") {
+      try {
+        const jsonStr = await callGroq(smartText);
+        const extracted = JSON.parse(jsonStr);
+        setSmartExtracted(extracted);
+        
+        // Step 2: Create calendar event (deterministic)
+        const eventLabel = `${extracted.eventType || "Hearing"} (Smart Entry)`;
+        const eventDate = extracted.date;
+        const eventNote = `${extracted.time || "No time"} @ ${extracted.location || "No location"}`;
+        
+        onAddDeadline(eventLabel, eventDate, "prep", eventNote);
+        
+        // Step 3: Draft client notification text
+        const actionText = extracted.clientAction ? ` Please ${extracted.clientAction.toLowerCase().replace(/^please\s+/i, "")}.` : "";
+        const timeText = extracted.time ? ` at ${extracted.time}` : "";
+        const locText = extracted.location ? ` at ${extracted.location}` : "";
+        const draftedMsg = `Your next hearing is on ${extracted.date}${timeText}${locText}.${actionText}`;
+        setSmartDraftedMessage(draftedMsg);
+        setToolState("complete");
+      } catch (err) {
+        console.error("Smart hearing extraction failed:", err);
+        setToolState("idle");
+      }
+      return;
+    }
+    
+    // Simulate API delay for other tools
     setTimeout(() => {
       setToolState("complete");
       
       // Calculate outputs based on tools
-      if (tool.id === "deadlines") {
-        const baseDate = new Date(triggerDate);
-        let list = [];
-        if (triggerEvent === "summons") {
-          // Written statement 30 days mandatory / 90 days discretionary / 120 days hard cap
-          const d30 = addDays(baseDate, 30);
-          const d90 = addDays(baseDate, 90);
-          const d120 = addDays(baseDate, 120);
-          list = [
-            { label: "Mandatory Written Statement (30 Days)", date: d30, risk: "mandatory", note: "Order VIII Rule 1 CPC statutory deadline" },
-            { label: "Discretionary WS Limit (90 Days)", date: d90, risk: "directory", note: "Subject to court condonation of delay" },
-            { label: "Hard Statutory Limit (120 Days)", date: d120, risk: "limitation", note: "Commercial Courts Act strict limitation" }
-          ];
-        } else if (triggerEvent === "fir") {
-          // Chargesheet timeline: 60/90 days for bail
-          const d60 = addDays(baseDate, 60);
-          const d90 = addDays(baseDate, 90);
-          list = [
-            { label: "Default Bail Eligibility (60 Days)", date: d60, risk: "mandatory", note: "If offense punishable under 10 yrs (Sec 167 CrPC)" },
-            { label: "Default Bail Eligibility (90 Days)", date: d90, risk: "limitation", note: "For heinous offenses punishable by life or death" }
-          ];
+      if (tool.id === "client") {
+        // Check if using the canned text or a newly drafted text
+        const isCanned = clientUpdateEnglish.includes("18 July 2025") || clientUpdateEnglish.includes("18 జూలై 2025") || clientUpdateEnglish.includes("18 जुलाई 2025");
+        if (isCanned) {
+          const translations = {
+            Hindi: `आपका जमानत आवेदन 18 जुलाई 2025 को हैदराबाद सत्र न्यायालय में न्यायाधीश राव के समक्ष सूचीबद्ध किया गया है। कृपया अपने मूल आधार कार्ड और वेतन पर्ची के साथ सुबह 10 बजे तक पहुंचें।`,
+            Telugu: `మీ బెయిల్ పిటిషన్ 18 జూలై 2025 న హైదరాబాద్ సెషన్స్ కోర్టులో జడ్జి రావు గారి ఎదుట లిస్ట్ చేయబడింది. దయచేసి మీ ఒరిజినల్ ఆధార్ కార్డు మరియు జీతం స్లిప్ తో ఉదయం 10 గంటలకల్లా హాజరుకావాలి.`,
+            Urdu: `آپ کی ضمانت کی سماعت 18 جولائی 2025 کو حیدرآباد سیشن کورٹ میں جج راؤ کے سامنے درج کی گئی ہے۔ براہ کرم صبح 10 بجے تک اپنے اصلی آدھار کارڈ اور تنخواہ کی پرچی کے ساتھ پہنچیں۔`,
+            Tamil: `உங்கள் ஜாமீன் மனு ஜூலை 18, 2025 அன்று ஹைதராபாத் செஷன்ஸ் நீதிமன்றத்தில் நீதிபதி ராவ் முன்னிலையில் பட்டியலிடப்பட்டுள்ளது. தயவுசெய்து உங்கள் அசல் ஆதார் அட்டை மற்றும் சம்பள சீட்டுடன் காலை 10 மணிக்குள் வரவும்.`,
+            English: clientUpdateEnglish
+          };
+          setTranslatedText(translations[clientLanguage] || translations["Hindi"]);
         } else {
-          // Limitation timeline
-          const d3yrs = addDays(baseDate, 3 * 365);
-          list = [
-            { label: "Statutory Limitation Filing Period", date: d3yrs, risk: "limitation", note: "3 years from cause of action under Limitation Act" }
-          ];
+          setTranslatedText(getFallbackTranslation(clientUpdateEnglish, clientLanguage));
         }
-        setComputedDeadlines(list);
-      } else if (tool.id === "client") {
-        // Translation mock
-        const translations = {
-          Hindi: `आपका जमानत आवेदन 18 जुलाई 2025 को हैदराबाद सत्र न्यायालय में न्यायाधीश राव के समक्ष सूचीबद्ध किया गया है। कृपया अपने मूल आधार कार्ड और वेतन पर्ची के साथ सुबह 10 बजे तक पहुंचें।`,
-          Telugu: `మీ బెయిల్ పిటిషన్ 18 జూలై 2025 న హైదరాబాద్ సెషన్స్ కోర్టులో జడ్జి రావు గారి ఎదుట లిస్ట్ చేయబడింది. దయచేసి మీ ఒరిజినల్ ఆధార్ కార్డు మరియు జీతం స్లిప్ తో ఉదయం 10 గంటలకల్లా హాజరుకావాలి.`,
-          Urdu: `آپ کی ضمانت کی سماعت 18 جولائی 2025 کو حیدرآباد سیشن کورٹ میں جج راؤ کے سامنے درج کی گئی ہے۔ براہ کرم صبح 10 بجے تک اپنے اصلی آدھار کارڈ اور تنخواہ کی پرچی کے ساتھ پہنچیں۔`,
-          Tamil: `உங்கள் ஜாமீன் மனு ஜூலை 18, 2025 அன்று ஹைதராபாத் செஷன்ஸ் நீதிமன்றத்தில் நீதிபதி ராவ் முன்னிலையில் பட்டியலிடப்பட்டுள்ளது. தயவுசெய்து உங்கள் அசல் ஆதார் அட்டை மற்றும் சம்பள சீட்டுடன் காலை 10 மணிக்குள் வரவும்.`,
-          English: clientUpdateEnglish
-        };
-        setTranslatedText(translations[clientLanguage] || translations["Hindi"]);
       }
     }, 2000);
   };
@@ -1886,7 +2124,7 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
               <span style={{ fontSize: 11, fontWeight: 700, color: "var(--gold)", textTransform: "uppercase" }}>What this tool does</span>
               <p style={{ fontSize: 12.5, color: "var(--text-main)", marginTop: 4, lineHeight: 1.4 }}>
                 {tool.id === "summarize_extract" && "Summarizes files to create a short summary and automatically extracts case parameters (numbers, parties, dates)."}
-                {tool.id === "deadlines" && "Calculates due dates for written statements, chargesheets, or filings."}
+                {tool.id === "deadlines" && "Type or paste case updates to extract details, schedule events, and alert clients automatically."}
                 {tool.id === "client" && "Translates your case updates to the client's language and makes an audio version."}
                 {tool.id === "dictate" && "Records what you say and types it out. You can speak in a mix of Hindi and English."}
                 {tool.id === "search_cases" && "Searches legal databases to find similar cases and see how they ended."}
@@ -1894,6 +2132,32 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
             </div>
 
             {/* Inputs based on Tool ID */}
+            {tool.id === "deadlines" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>
+                    Describe the hearing or paste the order
+                  </label>
+                  <textarea 
+                    className="input-field" 
+                    rows={5} 
+                    placeholder="e.g. Next hearing is listed on 28 July 2025 at 11:30 AM in the City Civil Court. Complainant must bring original property title deeds."
+                    value={smartText}
+                    onChange={(e) => setSmartText(e.target.value)}
+                    style={{ fontSize: 12.5 }}
+                  />
+                </div>
+                <button 
+                  type="button" 
+                  className="btn-primary" 
+                  onClick={handleLaunchTool}
+                  disabled={!smartText.trim()}
+                  style={{ width: "100%", justifyContent: "center" }}
+                >
+                  Generate Details
+                </button>
+              </div>
+            )}
             {tool.id === "summarize_extract" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <div style={{ border: "2px dashed var(--border-color)", borderRadius: "var(--radius-lg)", padding: "40px 20px", textAlign: "center" }}>
@@ -1908,28 +2172,6 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
                     </button>
                   </div>
                 </div>
-              </div>
-            )}
-
-            {tool.id === "deadlines" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <div>
-                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>Triggering Event</label>
-                  <select className="input-field" value={triggerEvent} onChange={(e) => setTriggerEvent(e.target.value)}>
-                    <option value="summons">Summons Served to Respondent (CPC)</option>
-                    <option value="fir">FIR Registered / Accused Arrested (CrPC)</option>
-                    <option value="cause_of_action">Cause of Action Accrued (Limitation Suit)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>Trigger Date</label>
-                  <input type="date" className="input-field" value={triggerDate} onChange={(e) => setTriggerDate(e.target.value)} />
-                </div>
-
-                <button type="button" className="btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={handleLaunchTool}>
-                  Compute Statutory Deadlines
-                </button>
               </div>
             )}
 
@@ -2078,6 +2320,62 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {/* Tool Output Result layout */}
             
+            {tool.id === "deadlines" && smartExtracted && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{
+                  background: "var(--alert-green-bg)", color: "var(--alert-green)", border: "1px solid rgba(41,96,67,0.15)",
+                  padding: "10px 14px", borderRadius: "8px", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 8
+                }}>
+                  <CheckCircle2 size={16} /> Calendar event successfully added to this case's schedule.
+                </div>
+
+                <div style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "14px" }}>
+                  <h4 className="serif" style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 8, color: "var(--text-main)" }}>Extracted Hearing Details</h4>
+                  
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, borderBottom: "1px solid rgba(0,0,0,0.03)", paddingBottom: 4 }}>
+                      <span style={{ color: "var(--text-muted)", fontWeight: 500 }}>Event Type</span>
+                      <span style={{ color: "var(--text-main)", fontWeight: 600 }}>{smartExtracted.eventType || "—"}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, borderBottom: "1px solid rgba(0,0,0,0.03)", paddingBottom: 4 }}>
+                      <span style={{ color: "var(--text-muted)", fontWeight: 500 }}>Date Listed</span>
+                      <span style={{ color: "var(--text-main)", fontWeight: 600 }}>{smartExtracted.date || "—"}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, borderBottom: "1px solid rgba(0,0,0,0.03)", paddingBottom: 4 }}>
+                      <span style={{ color: "var(--text-muted)", fontWeight: 500 }}>Time</span>
+                      <span style={{ color: "var(--text-main)", fontWeight: 600 }}>{smartExtracted.time || "—"}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, borderBottom: "1px solid rgba(0,0,0,0.03)", paddingBottom: 4 }}>
+                      <span style={{ color: "var(--text-muted)", fontWeight: 500 }}>Court Location</span>
+                      <span style={{ color: "var(--text-main)", fontWeight: 600 }}>{smartExtracted.location || "—"}</span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", fontSize: 12, paddingTop: 4 }}>
+                      <span style={{ color: "var(--text-muted)", fontWeight: 500, marginBottom: 2 }}>Client Action Required</span>
+                      <span style={{ color: "var(--text-main)", fontWeight: 600 }}>
+                        {smartExtracted.clientAction || "—"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "14px" }}>
+                  <h4 className="serif" style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 6, color: "var(--text-main)" }}>Drafted Client Notification</h4>
+                  <p style={{ fontSize: 12.5, color: "var(--text-main)", fontStyle: "italic", lineHeight: 1.45, margin: 0, borderLeft: "3px solid var(--gold)", paddingLeft: 10 }}>
+                    "{smartDraftedMessage}"
+                  </p>
+                </div>
+
+                <button 
+                  type="button" 
+                  className="btn-primary" 
+                  onClick={() => onTriggerClientTranslation(smartDraftedMessage)}
+                  style={{ width: "100%", justifyContent: "center" }}
+                >
+                  <Globe size={14} style={{ marginRight: 6 }} /> Open Client Translator
+                </button>
+              </div>
+            )}
+
             {tool.id === "summarize_extract" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <div style={{
@@ -2098,7 +2396,7 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
 
                 <div style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "14px" }}>
                   <h4 className="serif" style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 8, color: "var(--text-main)" }}>Extracted Parameters</h4>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                     <div>
                       <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--text-muted)", marginBottom: 4 }}>Case File Number</label>
                       <input type="text" className="input-field" style={{ padding: "8px 12px", fontSize: 12.5 }} value={extCaseNo} onChange={(e)=>setExtCaseNo(e.target.value)} />
@@ -2120,44 +2418,6 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
                   onClose();
                 }}>
                   Save & Update Docket
-                </button>
-              </div>
-            )}
-
-            {tool.id === "deadlines" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <div style={{
-                  background: "var(--alert-green-bg)", color: "var(--alert-green)", border: "1px solid rgba(41,96,67,0.15)",
-                  padding: "10px 14px", borderRadius: "8px", fontSize: 12, display: "flex", alignItems: "center", gap: 8, fontWeight: 600
-                }}>
-                  <CheckCircle2 size={16} /> {computedDeadlines.length} Procedural Clocks Found
-                </div>
-
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {computedDeadlines.map((dl, idx) => {
-                    const r = RISK_STYLES[dl.risk] || RISK_STYLES.prep;
-                    return (
-                      <div key={idx} style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "12px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-main)" }}>{dl.label}</span>
-                          <span style={{ fontSize: 9, textTransform: "uppercase", padding: "2px 6px", borderRadius: "10px", background: r.bg, color: r.fg, fontWeight: 700 }}>
-                            {r.label}
-                          </span>
-                        </div>
-                        <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 6px 0" }}>{dl.note}</p>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--alert-red)" }}>Due: {dl.date}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <button type="button" className="btn-primary" style={{ width: "100%" }} onClick={() => {
-                  computedDeadlines.forEach((dl) => {
-                    onAddDeadline(dl.label, dl.date, dl.risk, dl.note);
-                  });
-                  onClose();
-                }}>
-                  Save Clocks to Case File
                 </button>
               </div>
             )}
@@ -2826,28 +3086,491 @@ function SettingsView() {
             </div>
           </div>
         </div>
-
-        {/* Database stats */}
-        <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-lg)", padding: "20px" }}>
-          <h3 className="serif" style={{ fontSize: 16, fontWeight: 600, marginBottom: 10 }}>Litigation Ledger</h3>
-          <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 16 }}>
-            Your case repository is stored locally using HTML5 localStorage. Cleaning application cookies will wipe the record.
-          </p>
-          <button 
-            type="button" 
-            className="btn-secondary" 
-            style={{ color: "var(--alert-red)", borderColor: "rgba(168,61,34,0.3)" }}
-            onClick={() => {
-              if (confirm("This will erase all registered cases and revert the application to initial sample cases. Proceed?")) {
-                localStorage.removeItem("court_saarthi_cases");
-                window.location.reload();
-              }
-            }}
-          >
-            Revert to default mock database
-          </button>
-        </div>
       </div>
+    </div>
+  );
+}
+
+// --- Full-page Document Analysis View ---
+function DocumentAnalysisView({ matter, onBack }) {
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [activeHighlightRange, setActiveHighlightRange] = useState(null);
+  
+  const highlightRef = useRef(null);
+
+  const MOCK_FIR_TEXT = `FIRST INFORMATION REPORT
+(Under Section 154 CrPC)
+
+1. District: Hyderabad City
+PS: Nampally
+Year: 2025
+FIR No: 0123/2025
+Date: 12/05/2025
+
+2. Acts and Sections:
+- Bharatiya Nyaya Sanhita (BNS) Section 318 (Cheating)
+- Bharatiya Nyaya Sanhita (BNS) Section 324 (Mischief causing damage)
+
+3. Occurrence of Offence:
+Date: 10/05/2025
+Time: Around 11:00 PM
+Location: Nampally, Hyderabad
+
+4. Complainant / Informant:
+Name: Suresh Kumar
+Address: Nampally, Hyderabad.
+
+5. Details of Accused:
+Accused: Rahul Kumar
+
+6. Brief Facts of the Case:
+On 10/05/2025, around 11:00 PM, the accused Rahul Kumar approached the complainant Suresh Kumar regarding a financial transaction. The accused Rahul Kumar cheated the complainant (BNS Section 318) by promising a false high return and securing funds under fraudulent representations. When confronted, Rahul Kumar engaged in a heated dispute, snatched the complainant's phone, and threw it to the ground, committing mischief causing damage under BNS Section 324.
+
+7. Action Taken:
+Case registered under relevant provisions of BNS. Default chargesheet clock is set for 90 days. Next bail hearing is listed on 18/07/2025 at the Hyderabad Sessions Court.`;
+
+  const getMockAnalysisData = () => {
+    const text = MOCK_FIR_TEXT;
+    
+    const getSpan = (substring) => {
+      const idx = text.indexOf(substring);
+      if (idx === -1) return [-1, -1];
+      return [idx, idx + substring.length];
+    };
+
+    return {
+      raw_text: text,
+      facts: {
+        case_number: { label: "Case File Number", value: "FIR 0123/2025", quote: "FIR No: 0123/2025", verified: true, span: getSpan("FIR No: 0123/2025") },
+        complainant: { label: "Complainant", value: "Suresh Kumar", quote: "Name: Suresh Kumar", verified: true, span: getSpan("Name: Suresh Kumar") },
+        accused: { label: "Accused Party", value: "Rahul Kumar", quote: "Accused: Rahul Kumar", verified: true, span: getSpan("Accused: Rahul Kumar") },
+        hearing_date: { label: "Hearing Date", value: "18/07/2025", quote: "listed on 18/07/2025", verified: true, span: getSpan("listed on 18/07/2025") },
+        court: { label: "Jurisdiction Court", value: "Hyderabad Sessions Court", quote: "Hyderabad Sessions Court", verified: true, span: getSpan("Hyderabad Sessions Court") },
+        unverified_fact: { label: "Weapon Recovered", value: "Iron Rod", quote: "Iron Rod", verified: false, span: getSpan("Iron Rod") }
+      },
+      named_sections: [
+        { section: "BNS 318", quote: "BNS Section 318", verified: true, span: getSpan("BNS Section 318") },
+        { section: "BNS 324", quote: "BNS Section 324", verified: true, span: getSpan("BNS Section 324") },
+        { section: "BNS 999", quote: "BNS 999 (Treason)", verified: false, span: getSpan("BNS 999 (Treason)") }
+      ],
+      suggested_sections: [
+        { 
+          section: "BNS 115", 
+          label: "voluntarily causing hurt",
+          basis_fact: "engaged in a heated dispute, snatched the complainant's phone, and threw it to the ground",
+          basis_span: getSpan("engaged in a heated dispute, snatched the complainant's phone, and threw it to the ground"), 
+          verified_basis: true,
+          disclaimer: "AI-suggested — verify against statute" 
+        }
+      ]
+    };
+  };
+
+  const data = getMockAnalysisData();
+
+  // Scroll to highlight element
+  useEffect(() => {
+    if (activeHighlightRange && activeHighlightRange[0] !== -1 && highlightRef.current) {
+      highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [activeHighlightRange]);
+
+  const handleReanalyse = () => {
+    setIsAnalyzing(true);
+    setActiveHighlightRange(null);
+    setTimeout(() => {
+      setIsAnalyzing(false);
+    }, 1500);
+  };
+
+  // Check loading animation on mount
+  useEffect(() => {
+    setIsAnalyzing(true);
+    const timer = setTimeout(() => {
+      setIsAnalyzing(false);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Text rendering with highlight
+  const renderDocumentText = () => {
+    if (!activeHighlightRange || activeHighlightRange[0] === -1 || activeHighlightRange[1] === -1) {
+      return <div>{data.raw_text}</div>;
+    }
+    const [start, end] = activeHighlightRange;
+    const preText = data.raw_text.substring(0, start);
+    const highlighted = data.raw_text.substring(start, end);
+    const postText = data.raw_text.substring(end);
+
+    return (
+      <div>
+        {preText}
+        <mark 
+          ref={highlightRef} 
+          style={{ 
+            background: "rgba(198, 155, 63, 0.35)", 
+            color: "inherit", 
+            padding: "2px 4px", 
+            borderRadius: "3px", 
+            borderBottom: "2px solid var(--gold)",
+            fontWeight: "500",
+            transition: "all var(--transition-normal)"
+          }}
+        >
+          {highlighted}
+        </mark>
+        {postText}
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg-app)", overflow: "hidden" }}>
+      {/* Header */}
+      <header style={{
+        height: 70,
+        background: "var(--bg-card)",
+        borderBottom: "1px solid var(--border-color)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "0 32px",
+        flexShrink: 0
+      }}>
+        {/* Back Link */}
+        <button 
+          onClick={onBack}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            fontSize: 13,
+            fontWeight: 700,
+            color: "var(--primary)",
+            background: "var(--bg-app)",
+            border: "1px solid var(--border-color)",
+            borderRadius: "20px",
+            cursor: "pointer",
+            padding: "8px 16px",
+            transition: "all var(--transition-fast)"
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = "var(--primary-light)";
+            e.currentTarget.style.borderColor = "var(--primary)";
+            e.currentTarget.style.transform = "translateX(-2px)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = "var(--primary)";
+            e.currentTarget.style.borderColor = "var(--border-color)";
+            e.currentTarget.style.transform = "translateX(0)";
+          }}
+        >
+          <ArrowLeft size={15} /> 
+          <span>Back to Case: {matter.title}</span>
+        </button>
+
+        {/* Document Title */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 18, fontWeight: 700, color: "var(--text-main)" }} className="serif">
+            FIR_0123_2025_Nampally.pdf
+          </span>
+          <span style={{ fontSize: 10, background: "var(--gold-bg)", color: "var(--gold)", padding: "2px 8px", borderRadius: "10px", fontWeight: 700 }}>
+            Verifiable Brief
+          </span>
+        </div>
+
+        {/* Re-analyse Button */}
+        <button 
+          onClick={handleReanalyse} 
+          className="btn-primary"
+          style={{ padding: "8px 16px" }}
+          disabled={isAnalyzing}
+        >
+          <UploadCloud size={16} />
+          <span>Upload / Re-analyse</span>
+        </button>
+      </header>
+
+      {/* Main View Area */}
+      {isAnalyzing ? (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
+          <div style={{
+            width: 50, height: 50, borderRadius: "50%",
+            border: "3px solid var(--border-color)",
+            borderTopColor: "var(--primary)",
+            animation: "spin 1s infinite linear"
+          }} />
+          <div style={{ textAlign: "center" }}>
+            <h4 className="serif" style={{ fontSize: 16, color: "var(--text-main)" }}>Verifying Brief Citations...</h4>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+              Parsing statutory segments, mapping evidence parameters
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flex: 1, overflow: "hidden", width: "100%" }}>
+          {/* Left Panel: Document View */}
+          <div style={{
+            width: "50%",
+            overflowY: "auto",
+            padding: "24px 32px",
+            background: "var(--bg-app)",
+            height: "100%"
+          }}>
+            <div style={{
+              background: "var(--bg-card)",
+              border: "1px solid var(--border-color)",
+              borderRadius: "var(--radius-lg)",
+              padding: "32px",
+              boxShadow: "var(--shadow-sm)",
+              minHeight: "100%"
+            }}>
+              <h3 className="serif" style={{ fontSize: 16, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 20 }}>
+                Document Transcription
+              </h3>
+              <div style={{
+                whiteSpace: "pre-wrap",
+                fontFamily: "var(--font-sans)",
+                fontSize: "14px",
+                lineHeight: "1.65",
+                color: "var(--text-main)",
+                textAlign: "left"
+              }}>
+                {renderDocumentText()}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Panel: Analyzed Citations */}
+          <div style={{
+            width: "50%",
+            overflowY: "auto",
+            padding: "24px 32px",
+            borderLeft: "1px solid var(--border-color)",
+            background: "var(--bg-card)",
+            height: "100%",
+            display: "flex",
+            flexDirection: "column",
+            gap: 28
+          }}>
+            {/* Section 1: Key Facts */}
+            <div>
+              <h3 className="serif" style={{ fontSize: 18, color: "var(--text-main)", marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
+                <span>Key Facts</span>
+                <span style={{ fontSize: 11, background: "rgba(0,0,0,0.05)", padding: "2px 8px", borderRadius: "10px", color: "var(--text-muted)" }}>
+                  Verified Parameters
+                </span>
+              </h3>
+              <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 14 }}>
+                Verifiable case metadata points cited in the primary docket report.
+              </p>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                {Object.entries(data.facts).map(([key, fact]) => {
+                  const isVerified = fact.verified && fact.span && fact.span[0] !== -1;
+                  return (
+                    <div 
+                      key={key} 
+                      style={{
+                        background: isVerified ? "var(--bg-app)" : "rgba(128, 128, 128, 0.05)",
+                        border: "1px solid",
+                        borderColor: isVerified ? "var(--border-color)" : "rgba(128, 128, 128, 0.2)",
+                        borderRadius: "var(--radius-md)",
+                        padding: "12px 14px",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                        opacity: isVerified ? 1 : 0.6,
+                        transition: "all var(--transition-fast)"
+                      }}
+                    >
+                      <div>
+                        <span style={{ display: "block", fontSize: 10.5, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.02em" }}>
+                          {fact.label}
+                        </span>
+                        <span style={{ 
+                          display: "block", 
+                          fontSize: 13, 
+                          fontWeight: 600, 
+                          color: isVerified ? "var(--text-main)" : "var(--text-muted)", 
+                          marginTop: 4,
+                          textDecoration: "none"
+                        }}>
+                          {fact.value}
+                        </span>
+                      </div>
+                      
+                      <div style={{ marginTop: 10, display: "flex", justifyContent: "flex-end" }}>
+                        {isVerified ? (
+                          <button 
+                            onClick={() => setActiveHighlightRange(fact.span)}
+                            className="btn-secondary"
+                            style={{ padding: "4px 8px", fontSize: 10.5, display: "flex", alignItems: "center", gap: 4, borderRadius: "6px" }}
+                          >
+                            <Search size={11} />
+                            <span>Cite Source</span>
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: 10.5, color: "var(--text-muted)", fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+                            <AlertTriangle size={12} color="var(--text-muted)" />
+                            <span>couldn't confirm in document</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Section 2: Sections Named in Document */}
+            <div>
+              <h3 className="serif" style={{ fontSize: 18, color: "var(--text-main)", marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
+                <span>Sections Named in Document</span>
+                <span style={{ fontSize: 11, background: "var(--alert-green-bg)", padding: "2px 8px", borderRadius: "10px", color: "var(--alert-green)", fontWeight: 600 }}>
+                  Confirmed Provisions
+                </span>
+              </h3>
+              <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 14 }}>
+                Statutes explicitly referenced by section code in the docket text.
+              </p>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {data.named_sections.map((sec, idx) => {
+                  const isVerified = sec.verified && sec.span && sec.span[0] !== -1;
+                  return (
+                    <div 
+                      key={idx}
+                      style={{
+                        background: isVerified ? "var(--bg-app)" : "rgba(128, 128, 128, 0.05)",
+                        border: "1px solid",
+                        borderColor: isVerified ? "var(--border-color)" : "rgba(128, 128, 128, 0.2)",
+                        borderRadius: "var(--radius-md)",
+                        padding: "12px 16px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        opacity: isVerified ? 1 : 0.6,
+                        transition: "all var(--transition-fast)"
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        {isVerified ? (
+                          <CheckCircle2 size={16} color="var(--alert-green)" />
+                        ) : (
+                          <AlertTriangle size={15} color="var(--text-muted)" />
+                        )}
+                        <div>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: isVerified ? "var(--text-main)" : "var(--text-muted)" }}>
+                            {sec.section}
+                          </span>
+                          <span style={{ display: "block", fontSize: 11.5, color: "var(--text-muted)", marginTop: 2, fontStyle: "italic" }}>
+                            "{sec.quote}"
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        {isVerified ? (
+                          <button 
+                            onClick={() => setActiveHighlightRange(sec.span)}
+                            className="btn-secondary"
+                            style={{ padding: "4px 8px", fontSize: 10.5, display: "flex", alignItems: "center", gap: 4, borderRadius: "6px" }}
+                          >
+                            <Search size={11} />
+                            <span>Cite Source</span>
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: 10.5, color: "var(--text-muted)", fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+                            <span>couldn't confirm in document</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Section 3: AI Suggested Sections */}
+            <div>
+              <h3 className="serif" style={{ fontSize: 18, color: "var(--text-main)", marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
+                <span>AI Suggested Sections</span>
+                <span style={{ fontSize: 10.5, background: "var(--gold-bg)", padding: "2px 8px", borderRadius: "10px", color: "var(--gold)", fontWeight: 700 }}>
+                  Inferred Statutes
+                </span>
+              </h3>
+              <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 14 }}>
+                Statutes inferred by AI model from factual context. Check against active statutes to confirm.
+              </p>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {data.suggested_sections.map((sec, idx) => {
+                  return (
+                    <div 
+                      key={idx}
+                      style={{
+                        background: "var(--alert-yellow-bg)",
+                        border: "1.5px dashed var(--gold)",
+                        borderRadius: "var(--radius-lg)",
+                        padding: "16px 18px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 12
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                        <div>
+                          <span style={{ fontSize: 14.5, fontWeight: 700, color: "var(--text-main)" }}>
+                            {sec.section}
+                          </span>
+                          <span style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginTop: 2 }}>
+                            Label: {sec.label}
+                          </span>
+                        </div>
+
+                        <span style={{
+                          fontSize: 9.5,
+                          fontWeight: 700,
+                          textTransform: "uppercase",
+                          padding: "2px 6px",
+                          borderRadius: "6px",
+                          background: "rgba(198, 155, 63, 0.15)",
+                          color: "var(--gold)",
+                          letterSpacing: "0.02em"
+                        }}>
+                          {sec.disclaimer}
+                        </span>
+                      </div>
+
+                      <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "10px 12px" }}>
+                        <span style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>
+                          Prompting Fact Basis
+                        </span>
+                        <p style={{ fontSize: 12, color: "var(--text-main)", fontStyle: "italic", margin: "4px 0 0 0", lineHeight: 1.4 }}>
+                          "{sec.basis_fact}"
+                        </p>
+                      </div>
+
+                      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                        <button 
+                          onClick={() => setActiveHighlightRange(sec.basis_span)}
+                          className="btn-secondary"
+                          style={{ padding: "4px 8px", fontSize: 10.5, display: "flex", alignItems: "center", gap: 4, borderRadius: "6px" }}
+                        >
+                          <Search size={11} />
+                          <span>Cite Fact Basis</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
