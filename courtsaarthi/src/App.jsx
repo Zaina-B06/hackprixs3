@@ -68,6 +68,17 @@ const INITIAL_MATTERS = [
     ],
     notes: [
       { date: "15 May 2025", author: "Adv. Zainab", content: "Met Rahul's brother. He states that Rahul was at home during the incident. Need to secure neighborhood CCTV footage from 11 PM onwards." }
+    ],
+    clientUpdates: [
+      {
+        id: "up_sample1",
+        timestamp: Date.now() - 86400000 * 2, // 2 days ago
+        date: "11 Jun 2025",
+        language: "Telugu",
+        englishText: "Your bail hearing has been successfully listed in front of Judge Rao at the Hyderabad Sessions Court for 18 July 2025. Please arrive by 10 AM with your physical Aadhaar card and salary slip.",
+        translatedText: "మీ బెయిల్ పిటిషన్ 18 జూలై 2025 న హైదరాబాద్ సెషన్స్ కోర్టులో జడ్జి రావు గారి ఎదుట లిస్ట్ చేయబడింది. దయచేసి మీ ఒరిజినల్ ఆధార్ కార్డు మరియు జీతం స్లిప్ తో ఉదయం 10 గంటలకల్లా హాజరుకావాలి.",
+        status: "sent"
+      }
     ]
   },
   {
@@ -130,8 +141,7 @@ const INITIAL_MATTERS = [
 ];
 
 const TOOLS = [
-  { id: "summarize", icon: FileText, name: "Summarize document", desc: "Turn long court documents or FIRs into short, easy summaries" },
-  { id: "extract", icon: Search, name: "Extract key details", desc: "Automatically find and list case numbers, parties, and dates" },
+  { id: "summarize_extract", icon: FileText, name: "Summarize & Extract Details", desc: "Scan files to create a short summary and automatically pull case numbers, parties, and dates" },
   { id: "deadlines", icon: CalendarDays, name: "Calculate deadlines", desc: "Work out due dates and alerts based on standard rules" },
   { id: "client", icon: Languages, name: "Update client", desc: "Write updates in English and translate them to client's language" },
   { id: "dictate", icon: Mic, name: "Dictate note", desc: "Talk to record notes. Mix English & Hindi naturally to get typed text" },
@@ -301,7 +311,7 @@ export default function App() {
             <SidebarBtn 
               active={activeTab === "client"} 
               icon={Languages} 
-              label="Client Multi-Lingual" 
+              label="Client Updates" 
               onClick={() => { setActiveTab("client"); }} 
             />
             <SidebarBtn 
@@ -1152,7 +1162,7 @@ function CaseDetail({ matter, onBack, setCases, cases }) {
                 title="AI Assistant Tools" 
                 desc="Use AI to summarize files, translate, or check dates" 
                 icon={Activity} 
-                badgeText="6 AI Tools"
+                badgeText="5 AI Tools"
                 onClick={() => setOpenFolder("ai-tools")}
               />
             </div>
@@ -1566,6 +1576,33 @@ function CaseDetail({ matter, onBack, setCases, cases }) {
             });
             setCases(updatedCases);
           }}
+          onAddClientUpdate={(englishText, translatedText, language) => {
+            const newUpdate = {
+              id: "up_" + Date.now(),
+              timestamp: Date.now(),
+              date: new Date().toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' }),
+              language,
+              englishText,
+              translatedText,
+              status: "sent"
+            };
+            const newNote = {
+              date: new Date().toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' }),
+              author: "Adv. Zainab Ali (Client Updates Log)",
+              content: `WhatsApp Client Update sent in ${language}.\nEnglish: "${englishText}"\nTranslated: "${translatedText}"`
+            };
+            const updatedCases = cases.map((c) => {
+              if (c.id === matter.id) {
+                return {
+                  ...c,
+                  clientUpdates: [newUpdate, ...(c.clientUpdates || [])],
+                  notes: [newNote, ...(c.notes || [])]
+                };
+              }
+              return c;
+            });
+            setCases(updatedCases);
+          }}
         />
       )}
     </div>
@@ -1663,7 +1700,7 @@ function SectionLabel({ children }) {
 }
 
 // --- ToolPanel Interactive Panel (AI Simulations) ---
-function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtractedDetails }) {
+function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtractedDetails, onAddClientUpdate }) {
   const [toolState, setToolState] = useState("idle"); // idle, loading, complete
   
   // States for specific tools
@@ -1848,8 +1885,7 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
             <div style={{ background: "var(--bg-app)", borderRadius: "var(--radius-md)", padding: "14px", border: "1px solid var(--border-color)" }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: "var(--gold)", textTransform: "uppercase" }}>What this tool does</span>
               <p style={{ fontSize: 12.5, color: "var(--text-main)", marginTop: 4, lineHeight: 1.4 }}>
-                {tool.id === "summarize" && "Creates a short, simple summary of long court documents, FIRs, or orders."}
-                {tool.id === "extract" && "Finds and lists key details from documents like case numbers, parties, and dates."}
+                {tool.id === "summarize_extract" && "Summarizes files to create a short summary and automatically extracts case parameters (numbers, parties, dates)."}
                 {tool.id === "deadlines" && "Calculates due dates for written statements, chargesheets, or filings."}
                 {tool.id === "client" && "Translates your case updates to the client's language and makes an audio version."}
                 {tool.id === "dictate" && "Records what you say and types it out. You can speak in a mix of Hindi and English."}
@@ -1858,7 +1894,7 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
             </div>
 
             {/* Inputs based on Tool ID */}
-            {tool.id === "summarize" && (
+            {tool.id === "summarize_extract" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <div style={{ border: "2px dashed var(--border-color)", borderRadius: "var(--radius-lg)", padding: "40px 20px", textAlign: "center" }}>
                   <UploadCloud size={32} color="var(--text-muted)" style={{ margin: "0 auto 12px" }} />
@@ -1871,18 +1907,6 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
                       Order_Copy_CS154.pdf
                     </button>
                   </div>
-                </div>
-              </div>
-            )}
-
-            {tool.id === "extract" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ border: "2px dashed var(--border-color)", borderRadius: "var(--radius-lg)", padding: "24px", textAlign: "center" }}>
-                  <UploadCloud size={24} color="var(--text-muted)" style={{ margin: "0 auto 8px" }} />
-                  <span style={{ fontSize: 12, display: "block", color: "var(--text-main)" }}>Scan Plaint or Complaint Docket</span>
-                  <button type="button" className="btn-primary" style={{ padding: "6px 12px", fontSize: 11, marginTop: 12 }} onClick={handleLaunchTool}>
-                    Simulate Doc Scan & Extract
-                  </button>
                 </div>
               </div>
             )}
@@ -2054,17 +2078,17 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {/* Tool Output Result layout */}
             
-            {tool.id === "summarize" && (
+            {tool.id === "summarize_extract" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <div style={{
                   background: "var(--alert-green-bg)", color: "var(--alert-green)", border: "1px solid rgba(41,96,67,0.15)",
                   padding: "10px 14px", borderRadius: "8px", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 8
                 }}>
-                  <CheckCircle2 size={16} /> Document Brief Generated Successfully
+                  <CheckCircle2 size={16} /> Summary & Parameters Extracted
                 </div>
 
-                <div style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "16px" }}>
-                  <h4 className="serif" style={{ fontSize: 14, fontWeight: 700, marginBottom: 8, color: "var(--text-main)" }}>Executive Summary</h4>
+                <div style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "14px" }}>
+                  <h4 className="serif" style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 8, color: "var(--text-main)" }}>Executive Summary</h4>
                   <p style={{ fontSize: 12.5, color: "var(--text-main)", lineHeight: 1.5, margin: 0 }}>
                     This case involves charges registered under IPC sections regarding allegations of physical altercation.
                     The primary complainant asserts that the incident occurred in public jurisdiction on 10th May. 
@@ -2072,55 +2096,27 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
                   </p>
                 </div>
 
-                <div style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "16px" }}>
-                  <h4 className="serif" style={{ fontSize: 14, fontWeight: 700, marginBottom: 8, color: "var(--text-main)" }}>Core Directives</h4>
-                  <ul style={{ paddingLeft: "16px", fontSize: 12, color: "var(--text-main)", display: "flex", flexDirection: "column", gap: 6 }}>
-                    <li>Defense must prepare default bail application before 90-day expiry date.</li>
-                    <li>Verify CCTV footage and secure alibi statements.</li>
-                    <li>Check complainant's phone call logs.</li>
-                  </ul>
+                <div style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "14px" }}>
+                  <h4 className="serif" style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 8, color: "var(--text-main)" }}>Extracted Parameters</h4>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--text-muted)", marginBottom: 4 }}>Case File Number</label>
+                      <input type="text" className="input-field" style={{ padding: "8px 12px", fontSize: 12.5 }} value={extCaseNo} onChange={(e)=>setExtCaseNo(e.target.value)} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--text-muted)", marginBottom: 4 }}>Target Court Room</label>
+                      <input type="text" className="input-field" style={{ padding: "8px 12px", fontSize: 12.5 }} value={extCourt} onChange={(e)=>setExtCourt(e.target.value)} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--text-muted)", marginBottom: 4 }}>Client Name</label>
+                      <input type="text" className="input-field" style={{ padding: "8px 12px", fontSize: 12.5 }} value={extClient} onChange={(e)=>setExtClient(e.target.value)} />
+                    </div>
+                  </div>
                 </div>
 
                 <button type="button" className="btn-primary" style={{ width: "100%" }} onClick={() => {
-                  onAddNote("AI Summarization Log: Extracted directives and brief summaries from uploaded docket document. Critical actions include checking alibi verification files.");
-                  onClose();
-                }}>
-                  File Brief Summary to Notes
-                </button>
-              </div>
-            )}
-
-            {tool.id === "extract" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <div style={{
-                  background: "var(--alert-green-bg)", color: "var(--alert-green)", border: "1px solid rgba(41,96,67,0.15)",
-                  padding: "10px 14px", borderRadius: "8px", fontSize: 12, display: "flex", alignItems: "center", gap: 8, fontWeight: 600
-                }}>
-                  <CheckCircle2 size={16} /> Extracted Metadata Fields
-                </div>
-
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <div>
-                    <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--text-muted)", marginBottom: 4 }}>Case File Number</label>
-                    <input type="text" className="input-field" style={{ padding: "8px 12px", fontSize: 12.5 }} value={extCaseNo} onChange={(e)=>setExtCaseNo(e.target.value)} />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--text-muted)", marginBottom: 4 }}>Target Court Room</label>
-                    <input type="text" className="input-field" style={{ padding: "8px 12px", fontSize: 12.5 }} value={extCourt} onChange={(e)=>setExtCourt(e.target.value)} />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--text-muted)", marginBottom: 4 }}>Client Name</label>
-                    <input type="text" className="input-field" style={{ padding: "8px 12px", fontSize: 12.5 }} value={extClient} onChange={(e)=>setExtClient(e.target.value)} />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--text-muted)", marginBottom: 4 }}>Extracted Statutory Sections</label>
-                    <input type="text" className="input-field" style={{ padding: "8px 12px", fontSize: 12.5 }} value={extIPCSection} onChange={(e)=>setExtIPCSection(e.target.value)} />
-                  </div>
-                </div>
-
-                <button type="button" className="btn-primary" style={{ width: "100%", marginTop: 8 }} onClick={() => {
                   onSaveExtractedDetails({ caseNo: extCaseNo, court: extCourt, client: extClient });
-                  onAddNote(`AI Document Extractor: Synchronized metadata. Verified statutory applicability for ${extIPCSection}.`);
+                  onAddNote("AI Summarization & Parameter Extraction Log: Parsed docket filings. Synchronized metadata variables. Logged brief summaries to case file.");
                   onClose();
                 }}>
                   Save & Update Docket
@@ -2288,7 +2284,7 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
                     Back & Edit
                   </button>
                   <button type="button" className="btn-primary" style={{ flex: 2, padding: "8px" }} onClick={() => {
-                    onAddNote(`AI Multilingual translation: Transmitted client update to WhatsApp. Language: ${clientLanguage}. Text: "${translatedText}"`);
+                    onAddClientUpdate(clientUpdateEnglish, translatedText, clientLanguage);
                     onClose();
                   }}>
                     Send & Log Update
@@ -2316,114 +2312,181 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
   );
 }
 
-// --- Multi-lingual updates tab ---
+// --- Client Updates tab ---
 function ClientUpdatesView({ cases }) {
-  const [selectedCaseId, setSelectedCaseId] = useState(cases[0]?.id || "");
-  const activeCase = cases.find(c => c.id === selectedCaseId);
-  const [rawText, setRawText] = useState("Your bail hearing has been successfully listed in front of Judge Rao at the Hyderabad Sessions Court for 18 July 2025. Please arrive by 10 AM with your physical Aadhaar card.");
-  const [lang, setLang] = useState("Hindi");
-  const [translated, setTranslated] = useState("");
+  const [selectedCaseFilter, setSelectedCaseFilter] = useState("all");
+  const [selectedLangFilter, setSelectedLangFilter] = useState("all");
 
-  const handleTranslate = () => {
-    const translationMap = {
-      Hindi: "आपका जमानत आवेदन 18 जुलाई 2025 को हैदराबाद सत्र न्यायालय में न्यायाधीश राव के समक्ष सूचीबद्ध किया गया है। कृपया सुबह 10 बजे तक अपने मूल आधार कार्ड के साथ पहुंचें।",
-      Telugu: "మీ బెయిల్ పిటిషన్ 18 జూలై 2025 న హైదరాబాద్ సెషన్స్ కోర్టులో జడ్జి రావు గారి ఎదుట లిస్ట్ చేయబడింది. దయచేసి మీ ఒరిజినల్ ఆధార్ కార్డుతో ఉదయం 10 గంటలకల్లా హాజరుకావాలి.",
-      Urdu: "آپ کی ضمانت کی سماعت 18 جولائی 2025 کو حیدرآباد سیشن کورٹ میں جج راؤ کے سامنے درج کی گئی ہے۔ براہ کرم صبح 10 بجے تک اپنے اصلی آدھار کارڈ کے ساتھ پہنچیں۔",
-      Tamil: "உங்கள் ஜாமீன் மனு ஜூலை 18, 2025 அன்று ஹைதராபாத் செஷன்ஸ் நீதிமன்றத்தில் நீதிபதி ராவ் முன்னிலையில் பட்டியலிப்பட்டுள்ளது. தயவுசெய்து உங்கள் அசல் ஆதார் அட்டையுடன் காலை 10 மணிக்குள் வரவும்."
-    };
-    setTranslated(translationMap[lang] || translationMap["Hindi"]);
-  };
+  // Collect all updates from cases
+  const allUpdates = [];
+  cases.forEach((c) => {
+    if (c.clientUpdates) {
+      c.clientUpdates.forEach((up) => {
+        allUpdates.push({
+          ...up,
+          caseId: c.id,
+          caseTitle: c.title,
+          clientName: c.client
+        });
+      });
+    }
+  });
+
+  // Sort by timestamp (newest first)
+  allUpdates.sort((a, b) => {
+    const tA = a.timestamp || 0;
+    const tB = b.timestamp || 0;
+    return tB - tA;
+  });
+
+  // Apply filters
+  const filteredUpdates = allUpdates.filter((up) => {
+    const matchesCase = selectedCaseFilter === "all" || up.caseId === selectedCaseFilter;
+    const matchesLang = selectedLangFilter === "all" || up.language.toLowerCase() === selectedLangFilter.toLowerCase();
+    return matchesCase && matchesLang;
+  });
+
+  const languagesList = ["Hindi", "Telugu", "Urdu", "Tamil", "English"];
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "32px" }}>
       <h2 className="serif" style={{ fontSize: 26, color: "var(--text-main)", marginBottom: 6 }}>
-        Multi-lingual Client Communication Hub
+        Client Updates Log
       </h2>
       <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 24 }}>
-        Compose client updates in English and immediately translate to regional vernacular languages. Includes audio translation playbacks.
+        Read-only log of all multilingual translated updates sent to clients across registered cases.
       </p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-        <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-lg)", padding: "24px" }}>
-          <h3 className="serif" style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>Draft Update</h3>
-          
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>Select Case Reference</label>
-              <select className="input-field" value={selectedCaseId} onChange={(e) => setSelectedCaseId(e.target.value)}>
-                {cases.map(c => (
-                  <option key={c.id} value={c.id}>{c.title} ({c.caseNo})</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>Client Language</label>
-              <select className="input-field" value={lang} onChange={(e) => setLang(e.target.value)}>
-                <option value="Hindi">Hindi (हिंदी)</option>
-                <option value="Telugu">Telugu (తెలుగు)</option>
-                <option value="Urdu">Urdu (اردو)</option>
-                <option value="Tamil">Tamil (தமிழ்)</option>
-              </select>
-            </div>
-
-            <div>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>Message Brief (English)</label>
-              <textarea 
-                className="input-field" 
-                rows={4} 
-                value={rawText} 
-                onChange={(e) => setRawText(e.target.value)}
-              />
-            </div>
-
-            <button type="button" className="btn-primary" onClick={handleTranslate} style={{ justifyContent: "center" }}>
-              <Globe size={16} /> Translate & Generate Audio
-            </button>
-          </div>
+      {/* Filter Toolbar */}
+      <div style={{
+        display: "flex",
+        gap: 16,
+        alignItems: "center",
+        background: "var(--bg-card)",
+        border: "1px solid var(--border-color)",
+        borderRadius: "var(--radius-md)",
+        padding: "16px 20px",
+        marginBottom: 24
+      }}>
+        <div style={{ flex: 1 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>Filter by Case File</label>
+          <select 
+            className="input-field" 
+            value={selectedCaseFilter} 
+            onChange={(e) => setSelectedCaseFilter(e.target.value)}
+            style={{ fontSize: 12.5, padding: "8px 12px" }}
+          >
+            <option value="all">All Cases ({cases.length})</option>
+            {cases.map((c) => (
+              <option key={c.id} value={c.id}>{c.title}</option>
+            ))}
+          </select>
         </div>
 
-        <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-lg)", padding: "24px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-          <div>
-            <h3 className="serif" style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>Translation Preview</h3>
-            
-            {translated ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <div style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "16px" }}>
-                  <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 700, marginBottom: 6 }}>WHATSAPP MESSAGE BRIEF</div>
-                  <p style={{ fontSize: 14, color: "var(--text-main)", fontStyle: "italic", margin: 0, borderLeft: "3px solid var(--gold)", paddingLeft: 10 }}>
-                    "{translated}"
+        <div style={{ flex: 1 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>Filter by Language</label>
+          <select 
+            className="input-field" 
+            value={selectedLangFilter} 
+            onChange={(e) => setSelectedLangFilter(e.target.value)}
+            style={{ fontSize: 12.5, padding: "8px 12px" }}
+          >
+            <option value="all">All Languages</option>
+            {languagesList.map((l) => (
+              <option key={l} value={l.toLowerCase()}>{l}</option>
+            ))}
+          </select>
+        </div>
+        
+        <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", height: "100%", minWidth: "120px", textAlign: "right" }}>
+          <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>MATCHING RECORDS</span>
+          <span style={{ fontSize: 18, fontWeight: 700, color: "var(--primary)" }}>{filteredUpdates.length}</span>
+        </div>
+      </div>
+
+      {/* Updates log list */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {filteredUpdates.length > 0 ? (
+          filteredUpdates.map((up, idx) => (
+            <div 
+              key={up.id || idx} 
+              style={{
+                background: "var(--bg-card)",
+                border: "1px solid var(--border-color)",
+                borderRadius: "var(--radius-lg)",
+                padding: "20px 24px",
+                boxShadow: "var(--shadow-sm)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 14
+              }}
+            >
+              {/* Header: Case, Client & Date info */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid var(--border-color)", paddingBottom: 12 }}>
+                <div>
+                  <span style={{ fontSize: 11, textTransform: "uppercase", fontWeight: 700, color: "var(--gold)" }}>
+                    {up.caseTitle}
+                  </span>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-main)", marginTop: 2 }}>
+                    Client: {up.clientName}
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{
+                    fontSize: 10,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                    padding: "3px 8px",
+                    borderRadius: "6px",
+                    fontWeight: 700,
+                    background: "rgba(198, 155, 63, 0.15)",
+                    color: "var(--gold)"
+                  }}>
+                    🌎 {up.language}
+                  </span>
+                  <span style={{ fontSize: 11.5, color: "var(--text-muted)", fontWeight: 500 }}>
+                    Sent: {up.date}
+                  </span>
+                </div>
+              </div>
+
+              {/* Body: English & Translation */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                {/* Original English */}
+                <div style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "14px" }}>
+                  <span style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6, textTransform: "uppercase" }}>Original (English)</span>
+                  <p style={{ fontSize: 12.5, color: "var(--text-muted)", lineHeight: 1.45, margin: 0 }}>
+                    {up.englishText}
                   </p>
                 </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--gold-bg)", padding: "12px 16px", borderRadius: "8px" }}>
-                  <Volume2 size={20} color="var(--gold)" />
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-main)" }}>Audio Voice Update Ready</div>
-                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Simulated natural text-to-speech audio transcript</span>
-                  </div>
+                {/* Translation */}
+                <div style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "14px" }}>
+                  <span style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--primary)", marginBottom: 6, textTransform: "uppercase" }}>Translated WhatsApp Alert</span>
+                  <p style={{ fontSize: 13.5, color: "var(--text-main)", fontWeight: 500, lineHeight: 1.45, margin: 0, fontStyle: "italic" }}>
+                    "{up.translatedText}"
+                  </p>
                 </div>
               </div>
-            ) : (
-              <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)", border: "1.5px dashed var(--border-color)", borderRadius: "var(--radius-md)" }}>
-                Draft update and click translate to view regional vernacular outputs.
-              </div>
-            )}
+            </div>
+          ))
+        ) : (
+          <div style={{
+            padding: "80px 24px",
+            textAlign: "center",
+            background: "var(--bg-card)",
+            border: "1px dashed var(--border-color)",
+            borderRadius: "var(--radius-lg)",
+            color: "var(--text-muted)"
+          }}>
+            <MessageSquare size={44} color="var(--text-muted)" style={{ margin: "0 auto 16px" }} />
+            <h3 className="serif" style={{ fontSize: 18, color: "var(--text-main)", marginBottom: 6 }}>No client updates sent yet</h3>
+            <p style={{ fontSize: 13, color: "var(--text-muted)", maxWidth: 360, margin: "0 auto" }}>
+              No client updates sent yet. Open a case and use 'Update client' to send one.
+            </p>
           </div>
-
-          {translated && (
-            <button 
-              className="btn-primary" 
-              onClick={() => {
-                alert("Vernacular message sent via mock WhatsApp gateway!");
-                setTranslated("");
-              }}
-              style={{ width: "100%", justifyContent: "center" }}
-            >
-              <MessageSquare size={16} /> Transmit Message to {activeCase ? activeCase.client : "Client"}
-            </button>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );
