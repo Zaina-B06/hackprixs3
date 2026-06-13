@@ -19,6 +19,7 @@ import {
   Trash2,
   Play,
   Pause,
+  Square,
   Volume2,
   Edit,
   Save,
@@ -129,11 +130,12 @@ const INITIAL_MATTERS = [
 ];
 
 const TOOLS = [
-  { id: "summarize", icon: FileText, name: "Summarize document", desc: "Court order or FIR into a plain brief" },
-  { id: "extract", icon: Search, name: "Extract key details", desc: "Pull case number, parties, dates" },
-  { id: "deadlines", icon: CalendarDays, name: "Compute deadlines", desc: "Statutory clock + prep chain" },
-  { id: "client", icon: Languages, name: "Update the client", desc: "Plain-language note in their language" },
-  { id: "dictate", icon: Mic, name: "Dictate a note", desc: "Speak in Hindi-English, get clean text" },
+  { id: "summarize", icon: FileText, name: "Summarize document", desc: "Turn long court documents or FIRs into short, easy summaries" },
+  { id: "extract", icon: Search, name: "Extract key details", desc: "Automatically find and list case numbers, parties, and dates" },
+  { id: "deadlines", icon: CalendarDays, name: "Calculate deadlines", desc: "Work out due dates and alerts based on standard rules" },
+  { id: "client", icon: Languages, name: "Update client", desc: "Write updates in English and translate them to client's language" },
+  { id: "dictate", icon: Mic, name: "Dictate note", desc: "Talk to record notes. Mix English & Hindi naturally to get typed text" },
+  { id: "search_cases", icon: Search, name: "Search similar cases", desc: "Look up past cases to see their details and how they ended" },
 ];
 
 const TYPE_TAGS = {
@@ -992,10 +994,10 @@ function CaseDetail({ matter, onBack, setCases, cases }) {
           onMouseEnter={(e) => e.target.style.color = "var(--primary)"}
           onMouseLeave={(e) => e.target.style.color = "var(--text-muted)"}
         >
-          <ArrowLeft size={16} /> {openFolder ? "Back to Dossier Folders" : "All active cases"}
+          <ArrowLeft size={16} /> {openFolder ? "Back to Case Sections" : "All cases"}
         </button>
 
-        {/* Case Dossier Title Block */}
+        {/* Case Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
@@ -1012,7 +1014,7 @@ function CaseDetail({ matter, onBack, setCases, cases }) {
                 {matter.type}
               </span>
               <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500 }}>
-                Docket Ref: {matter.id}
+                Case ID: {matter.id}
               </span>
             </div>
             <h2 className="serif" style={{ fontSize: 28, fontWeight: 700, margin: 0, color: "var(--text-main)" }}>
@@ -1037,12 +1039,12 @@ function CaseDetail({ matter, onBack, setCases, cases }) {
               gap: 6
             }}>
               <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--alert-green)" }} />
-              Active Trial File
+              Active Case
             </span>
           </div>
         </div>
 
-        {/* Timeline Chronology Flow (Always at top of Details) */}
+        {/* Case Timeline */}
         <div style={{
           background: "var(--bg-card)",
           border: "1px solid var(--border-color)",
@@ -1052,7 +1054,7 @@ function CaseDetail({ matter, onBack, setCases, cases }) {
           boxShadow: "var(--shadow-sm)"
         }}>
           <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--gold)", fontWeight: 700, display: "block", marginBottom: 16 }}>
-            Procedural Chronology Flow
+            Case Timeline
           </span>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", overflowX: "auto", paddingBottom: 6 }}>
             {matter.stages.map((s, idx) => {
@@ -1102,7 +1104,7 @@ function CaseDetail({ matter, onBack, setCases, cases }) {
         {openFolder === null ? (
           /* Folder Index Grid View (Uncluttered layout, click to open specific folder boxes) */
           <div>
-            <SectionLabel>Dossier Folders</SectionLabel>
+            <SectionLabel>Case Sections</SectionLabel>
             <div style={{
               display: "grid",
               gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
@@ -1111,8 +1113,8 @@ function CaseDetail({ matter, onBack, setCases, cases }) {
             }}>
               {/* Folder 1: Case Brief Box */}
               <FolderBoxCard 
-                title="Case Brief & Summary" 
-                desc="Quick executive narrative brief & case parameters" 
+                title="Case Brief" 
+                desc="A quick summary of the case and client details" 
                 icon={Info} 
                 badgeText="Profile"
                 onClick={() => setOpenFolder("brief")}
@@ -1120,17 +1122,17 @@ function CaseDetail({ matter, onBack, setCases, cases }) {
 
               {/* Folder 2: Clocks & Deadlines Box */}
               <FolderBoxCard 
-                title="Statutory Clocks" 
-                desc="Calculated default bail, limitation timers, & pleadings deadlines" 
+                title="Important Dates" 
+                desc="See due dates and deadlines based on legal rules" 
                 icon={Clock} 
-                badgeText={`${matter.deadlines?.length || 0} Alert Clocks`}
+                badgeText={`${matter.deadlines?.length || 0} Deadlines`}
                 onClick={() => setOpenFolder("deadlines")}
               />
 
               {/* Folder 3: Document Locker Box */}
               <FolderBoxCard 
-                title="Document Locker" 
-                desc="Store pleadings, scanned FIRs, and PDF orders" 
+                title="Documents" 
+                desc="Upload and store your case files" 
                 icon={FolderOpen} 
                 badgeText={`${matter.documents?.length || 0} Files`}
                 onClick={() => setOpenFolder("documents")}
@@ -1138,19 +1140,19 @@ function CaseDetail({ matter, onBack, setCases, cases }) {
 
               {/* Folder 4: Notes Log Box */}
               <FolderBoxCard 
-                title="Advocate Notes Log" 
-                desc="Record physical hearing briefs and voice recordings" 
+                title="Case Notes" 
+                desc="Read, write, and dictate notes" 
                 icon={Edit} 
-                badgeText={`${matter.notes?.length || 0} Entry Notes`}
+                badgeText={`${matter.notes?.length || 0} Notes`}
                 onClick={() => setOpenFolder("notes")}
               />
 
               {/* Folder 5: AI Assistants Box */}
               <FolderBoxCard 
-                title="AI Legal Tools" 
-                desc="Vernacular updates, speech recorders, and procedural clocks" 
+                title="AI Assistant Tools" 
+                desc="Use AI to summarize files, translate, or check dates" 
                 icon={Activity} 
-                badgeText="5 Tool Actions"
+                badgeText="6 AI Tools"
                 onClick={() => setOpenFolder("ai-tools")}
               />
             </div>
@@ -1188,11 +1190,11 @@ function CaseDetail({ matter, onBack, setCases, cases }) {
                   padding: 0
                 }}
               >
-                <ChevronLeft size={16} /> Back to Dossier Folders
+                <ChevronLeft size={16} /> Back to Case Sections
               </button>
 
               <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                Active Folder: {openFolder.toUpperCase()}
+                Active Section: {openFolder.toUpperCase()}
               </span>
             </div>
 
@@ -1468,7 +1470,7 @@ function CaseDetail({ matter, onBack, setCases, cases }) {
               <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                 <h3 className="serif" style={{ fontSize: 18, color: "var(--text-main)", margin: 0 }}>AI Legal Actions Panel</h3>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
                   {TOOLS.map((t) => {
                     const Icon = t.icon;
                     return (
@@ -1479,41 +1481,44 @@ function CaseDetail({ matter, onBack, setCases, cases }) {
                           background: "var(--bg-app)",
                           border: "1px solid var(--border-color)",
                           borderRadius: "var(--radius-md)",
-                          padding: "16px",
+                          padding: "24px 20px",
                           cursor: "pointer",
                           transition: "all var(--transition-fast)",
                           display: "flex",
                           flexDirection: "column",
-                          justifyContent: "space-between"
+                          justifyContent: "space-between",
+                          minHeight: "180px"
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.borderColor = "var(--primary)";
-                          e.currentTarget.style.transform = "translateY(-1px)";
+                          e.currentTarget.style.transform = "translateY(-2px)";
+                          e.currentTarget.style.boxShadow = "var(--shadow-md)";
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.borderColor = "var(--border-color)";
                           e.currentTarget.style.transform = "translateY(0)";
+                          e.currentTarget.style.boxShadow = "none";
                         }}
                       >
                         <div>
                           <div style={{
-                            width: 28,
-                            height: 28,
-                            borderRadius: "5px",
+                            width: 36,
+                            height: 36,
+                            borderRadius: "8px",
                             background: "var(--gold-bg)",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            marginBottom: 8
+                            marginBottom: 12
                           }}>
-                            <Icon size={14} color="var(--primary)" />
+                            <Icon size={18} color="var(--primary)" />
                           </div>
-                          <h4 style={{ fontSize: 13, fontWeight: 700, color: "var(--text-main)", marginBottom: 4 }}>{t.name}</h4>
-                          <p style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.3, margin: 0 }}>{t.desc}</p>
+                          <h4 style={{ fontSize: 15, fontWeight: 700, color: "var(--text-main)", marginBottom: 6 }}>{t.name}</h4>
+                          <p style={{ fontSize: 12.5, color: "var(--text-muted)", lineHeight: 1.4, margin: 0 }}>{t.desc}</p>
                         </div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--primary)", marginTop: 12, display: "flex", alignItems: "center", gap: 2 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--primary)", marginTop: 16, display: "flex", alignItems: "center", gap: 2 }}>
                           <span>Launch Tool</span>
-                          <ChevronRight size={12} />
+                          <ChevronRight size={14} />
                         </div>
                       </div>
                     );
@@ -1685,6 +1690,9 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
   const [transcribedText, setTranscribedText] = useState("");
   const transcriptionTimerRef = useRef(null);
 
+  // Search Past Cases States
+  const [searchCaseQuery, setSearchCaseQuery] = useState("");
+
   const Icon = tool.icon;
 
   // Cleanup timers
@@ -1838,13 +1846,14 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
         {toolState === "idle" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ background: "var(--bg-app)", borderRadius: "var(--radius-md)", padding: "14px", border: "1px solid var(--border-color)" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--gold)", textTransform: "uppercase" }}>Tool Scope</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--gold)", textTransform: "uppercase" }}>What this tool does</span>
               <p style={{ fontSize: 12.5, color: "var(--text-main)", marginTop: 4, lineHeight: 1.4 }}>
-                {tool.id === "summarize" && "Automatically extracts main issues, legal claims, procedural history, and key directives from complex Indian FIRs, charge-sheets, or court orders."}
-                {tool.id === "extract" && "Extracts standardized metadata fields from court summon filings, plaints, or complaints to keep the docket ledger synchronized."}
-                {tool.id === "deadlines" && "Computes the exact statutory timelines under Code of Criminal Procedure (CrPC), Code of Civil Procedure (CPC), and Limitation Act."}
-                {tool.id === "client" && "Translates case schedules, lawyer directions, or court orders to vernacular languages. Includes audio translation playbacks."}
-                {tool.id === "dictate" && "Captures bilingual verbal briefs (Hindi-English mix) and converts to clean, structured case logs using AI Speech models."}
+                {tool.id === "summarize" && "Creates a short, simple summary of long court documents, FIRs, or orders."}
+                {tool.id === "extract" && "Finds and lists key details from documents like case numbers, parties, and dates."}
+                {tool.id === "deadlines" && "Calculates due dates for written statements, chargesheets, or filings."}
+                {tool.id === "client" && "Translates your case updates to the client's language and makes an audio version."}
+                {tool.id === "dictate" && "Records what you say and types it out. You can speak in a mix of Hindi and English."}
+                {tool.id === "search_cases" && "Searches legal databases to find similar cases and see how they ended."}
               </p>
             </div>
 
@@ -1896,6 +1905,24 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
 
                 <button type="button" className="btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={handleLaunchTool}>
                   Compute Statutory Deadlines
+                </button>
+              </div>
+            )}
+
+            {tool.id === "search_cases" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>Search terms for past cases</label>
+                  <input 
+                    type="text" 
+                    className="input-field" 
+                    placeholder="e.g. default bail chargesheet delay 90 days"
+                    value={searchCaseQuery} 
+                    onChange={(e) => setSearchCaseQuery(e.target.value)} 
+                  />
+                </div>
+                <button type="button" className="btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={handleLaunchTool}>
+                  Search cases
                 </button>
               </div>
             )}
@@ -2135,6 +2162,52 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
                   onClose();
                 }}>
                   Save Clocks to Case File
+                </button>
+              </div>
+            )}
+
+            {tool.id === "search_cases" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{
+                  background: "var(--alert-green-bg)", color: "var(--alert-green)", border: "1px solid rgba(41,96,67,0.15)",
+                  padding: "10px 14px", borderRadius: "8px", fontSize: 12, display: "flex", alignItems: "center", gap: 8, fontWeight: 600
+                }}>
+                  <CheckCircle2 size={16} /> Found 2 similar cases
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-main)" }}>State of Maharashtra vs. Kapil (2021)</span>
+                      <span style={{ fontSize: 9, textTransform: "uppercase", padding: "2px 6px", borderRadius: "10px", background: "var(--alert-green-bg)", color: "var(--alert-green)", fontWeight: 700 }}>
+                        Bail Granted
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 11.5, color: "var(--text-muted)", margin: "0 0 6px 0" }}>High Court of Bombay</p>
+                    <p style={{ fontSize: 12, color: "var(--text-main)", margin: 0 }}>
+                      <b>Outcome:</b> The court ruled that if the investigation is not finished in 90 days, the accused has an absolute right to default bail.
+                    </p>
+                  </div>
+
+                  <div style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-main)" }}>Ramesh vs. State (2018)</span>
+                      <span style={{ fontSize: 9, textTransform: "uppercase", padding: "2px 6px", borderRadius: "10px", background: "var(--alert-green-bg)", color: "var(--alert-green)", fontWeight: 700 }}>
+                        Bail Granted
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 11.5, color: "var(--text-muted)", margin: "0 0 6px 0" }}>Supreme Court of India</p>
+                    <p style={{ fontSize: 12, color: "var(--text-main)", margin: 0 }}>
+                      <b>Outcome:</b> Confirmed that default bail cannot be delayed once the statutory period is complete and no chargesheet has been filed.
+                    </p>
+                  </div>
+                </div>
+
+                <button type="button" className="btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={() => {
+                  onAddNote(`AI Case Search: Found similar cases for "${searchCaseQuery || "default bail"}". key precedent: State vs. Kapil (2021) Bombay HC. Outcome: Bail is a right if chargesheet is delayed.`);
+                  onClose();
+                }}>
+                  Save Search Notes to Case File
                 </button>
               </div>
             )}
