@@ -143,7 +143,8 @@ const INITIAL_MATTERS = [
 const TOOLS = [
   { id: "summarize_extract", icon: FileText, name: "Summarize & Extract Details", desc: "Scan files to create a short summary and automatically pull case numbers, parties, and dates" },
   { id: "client", icon: Languages, name: "Update client", desc: "Write updates in English and translate them to client's language" },
-  { id: "dictate", icon: Mic, name: "Dictate note", desc: "Talk to record notes. Mix English & Hindi naturally to get typed text" },
+  { id: "dictate", icon: Mic, name: "Voice Dictation", desc: "Speak in a mix of Hindi and English to record notes and transcribe them to English text" },
+  { id: "draft_document", icon: FileText, name: "Draft Document", desc: "Select case documents to draft professional bail applications, legal notices, or replies" },
   { id: "search_cases", icon: Search, name: "Search similar cases", desc: "Look up past cases to see their details and how they ended" },
   { id: "deadlines", icon: Calendar, name: "Deadline", desc: "Type or paste case updates to extract details, schedule events, and alert clients automatically" },
 ];
@@ -334,11 +335,10 @@ export default function App() {
   // New Case Form State
   const [formTitle, setFormTitle] = useState("");
   const [formType, setFormType] = useState("criminal");
-  const [formCaseNo, setFormCaseNo] = useState("");
-  const [formCourt, setFormCourt] = useState("");
   const [formClient, setFormClient] = useState("");
   const [formClientLang, setFormClientLang] = useState("Hindi");
-  const [formNextDate, setFormNextDate] = useState("");
+  const [formPhone, setFormPhone] = useState("");
+  const [formAddress, setFormAddress] = useState("");
 
   // Sync to LocalStorage
   useEffect(() => {
@@ -356,17 +356,20 @@ export default function App() {
 
   const handleCreateCase = (e) => {
     e.preventDefault();
-    if (!formTitle || !formCaseNo) return;
+    if (!formTitle || !formClient) return;
 
+    const newId = "m_" + Date.now();
     const newCase = {
-      id: "m_" + Date.now(),
+      id: newId,
       title: formTitle,
       type: formType,
-      caseNo: formCaseNo,
-      court: formCourt || "District Court, Hyderabad",
-      client: formClient || "Anonymous Client",
+      caseNo: "Not set yet — run document analysis",
+      court: "Not set yet — run document analysis",
+      client: formClient,
+      clientPhone: formPhone,
+      clientAddress: formAddress,
       clientLang: formClientLang,
-      nextDate: formNextDate || new Date().toISOString().split("T")[0],
+      nextDate: "",
       openTasks: 0,
       stages: [
         { name: formType === "criminal" ? "FIR registered" : "Plaint filed", status: "done" },
@@ -375,24 +378,22 @@ export default function App() {
         { name: "Arguments", status: "upcoming" },
         { name: "Final order", status: "upcoming" }
       ],
-      deadlines: [
-        { label: "Prepare case brief", date: formNextDate || new Date().toISOString().split("T")[0], risk: "prep" }
-      ],
+      deadlines: [],
       documents: [],
       notes: []
     };
 
     setCases([newCase, ...cases]);
     setNewCaseModal(false);
+    setOpenId(newId); // Open the case details immediately!
     
     // Clear Form
     setFormTitle("");
     setFormType("criminal");
-    setFormCaseNo("");
-    setFormCourt("");
     setFormClient("");
     setFormClientLang("Hindi");
-    setFormNextDate("");
+    setFormPhone("");
+    setFormAddress("");
   };
 
   const selectedMatter = cases.find((m) => m.id === openId);
@@ -410,7 +411,7 @@ export default function App() {
   return (
     <div style={{ display: "flex", width: "100%", height: "100%", overflow: "hidden" }}>
       {/* Sidebar Navigation */}
-      {activeTab !== "document_analysis" && (
+      {activeTab !== "document_analysis" && activeTab !== "document_drafter" && (
         <aside style={{
           width: 250,
           background: "var(--bg-sidebar)",
@@ -542,7 +543,7 @@ export default function App() {
         overflow: "hidden"
       }}>
         {/* Top Header */}
-        {activeTab !== "document_analysis" && (
+        {activeTab !== "document_analysis" && activeTab !== "document_drafter" && (
         <header style={{
           height: 70,
           background: "var(--bg-card)",
@@ -611,6 +612,10 @@ export default function App() {
                     setOpenId(caseId);
                     setActiveTab("document_analysis");
                   }}
+                  onOpenDocumentDrafter={(caseId) => {
+                    setOpenId(caseId);
+                    setActiveTab("document_drafter");
+                  }}
                 />
           )}
 
@@ -622,6 +627,16 @@ export default function App() {
 
           {activeTab === "document_analysis" && (
             <DocumentAnalysisView 
+              matter={selectedMatter} 
+              onBack={() => setActiveTab("cases")} 
+              onSaveAnalysis={(updatedCase) => {
+                setCases(prevCases => prevCases.map(c => c.id === updatedCase.id ? { ...c, ...updatedCase } : c));
+              }}
+            />
+          )}
+
+          {activeTab === "document_drafter" && (
+            <DocumentDrafterView 
               matter={selectedMatter} 
               onBack={() => setActiveTab("cases")} 
             />
@@ -693,38 +708,27 @@ export default function App() {
                   </select>
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>Case / FIR No.</label>
-                  <input 
-                    type="text" 
-                    className="input-field" 
-                    required
-                    placeholder="e.g. FIR 0123/2025"
-                    value={formCaseNo} 
-                    onChange={(e) => setFormCaseNo(e.target.value)} 
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>Jurisdiction / Court Room</label>
-                <input 
-                  type="text" 
-                  className="input-field" 
-                  placeholder="e.g. Sessions Court, Hyderabad"
-                  value={formCourt} 
-                  onChange={(e) => setFormCourt(e.target.value)} 
-                />
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div>
                   <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>Client Name</label>
                   <input 
                     type="text" 
                     className="input-field" 
+                    required
                     placeholder="e.g. Ayesha Begum"
                     value={formClient} 
                     onChange={(e) => setFormClient(e.target.value)} 
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>Client Phone</label>
+                  <input 
+                    type="text" 
+                    className="input-field" 
+                    placeholder="e.g. +91 9876543210"
+                    value={formPhone} 
+                    onChange={(e) => setFormPhone(e.target.value)} 
                   />
                 </div>
                 <div>
@@ -744,12 +748,14 @@ export default function App() {
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>Next Hearing Date</label>
-                <input 
-                  type="date" 
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>Client Address</label>
+                <textarea 
                   className="input-field" 
-                  value={formNextDate} 
-                  onChange={(e) => setFormNextDate(e.target.value)} 
+                  rows={2}
+                  placeholder="e.g. Dabeerpura, Hyderabad"
+                  value={formAddress} 
+                  onChange={(e) => setFormAddress(e.target.value)} 
+                  style={{ resize: "vertical" }}
                 />
               </div>
 
@@ -967,10 +973,10 @@ function CaseGallery({ cases, onOpen, searchQuery, filterType, setFilterType, st
 
                   {/* Title & Case Number */}
                   <h3 className="serif" style={{ fontSize: 19, fontWeight: 700, margin: "0 0 6px 0", color: "var(--text-main)", lineHeight: 1.2 }}>
-                    {m.title}
+                    {m.complainant_name && m.accused_name ? `${m.complainant_name} vs. ${m.accused_name}` : m.title}
                   </h3>
                   <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 16, fontWeight: 500 }}>
-                    {m.caseNo} &nbsp;&middot;&nbsp; {m.court}
+                    {m.fo_number || m.caseNo} &nbsp;&middot;&nbsp; {m.court && m.court !== "Not set yet — run document analysis" ? m.court : (m.hearings && m.hearings.length > 0 ? m.hearings[0].court : "Not set yet — run document analysis")}
                   </div>
 
                   {/* Case Stage Timeline Mini progress bar */}
@@ -990,12 +996,12 @@ function CaseGallery({ cases, onOpen, searchQuery, filterType, setFilterType, st
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-muted)" }}>
                       <Calendar size={13} color="var(--gold)" />
-                      <span>Next Hearing: <b style={{ color: "var(--text-main)", fontWeight: 600 }}>{m.nextDate}</b></span>
+                      <span>Next Hearing: <b style={{ color: "var(--text-main)", fontWeight: 600 }}>{m.hearings && m.hearings.length > 0 ? m.hearings[0].hearing_date : (m.nextDate || "None")}</b></span>
                     </div>
                     
                     <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-muted)" }}>
                       <User size={13} color="var(--text-muted)" />
-                      <span>Client: <span style={{ color: "var(--text-main)", fontWeight: 500 }}>{m.client}</span> ({m.clientLang})</span>
+                      <span>Client: <span style={{ color: "var(--text-main)", fontWeight: 500 }}>{m.client_name || m.client}</span> ({m.clientLang})</span>
                     </div>
                   </div>
                   
@@ -1084,12 +1090,17 @@ function StatsCard({ label, val, desc, icon: Icon, color }) {
 }
 
 // --- Case Detail Page (Click to Reveal Folder Box Design) ---
-function CaseDetail({ matter, onBack, setCases, cases, onOpenDetail, onOpenDocumentAnalysis }) {
+function CaseDetail({ matter, onBack, setCases, cases, onOpenDetail, onOpenDocumentAnalysis, onOpenDocumentDrafter }) {
   const [openFolder, setOpenFolder] = useState(null); // null, 'brief', 'deadlines', 'documents', 'notes', 'ai-tools'
   const [activeTool, setActiveTool] = useState(null);
+  const [explainingDocIdx, setExplainingDocIdx] = useState(null);
   
   // Note inputs
   const [noteText, setNoteText] = useState("");
+
+  useEffect(() => {
+    setExplainingDocIdx(null);
+  }, [openFolder]);
 
   const handleAddNote = (e) => {
     e.preventDefault();
@@ -1206,10 +1217,10 @@ function CaseDetail({ matter, onBack, setCases, cases, onOpenDetail, onOpenDocum
               </span>
             </div>
             <h2 className="serif" style={{ fontSize: 28, fontWeight: 700, margin: 0, color: "var(--text-main)" }}>
-              {matter.title}
+              {matter.complainant_name && matter.accused_name ? `${matter.complainant_name} vs. ${matter.accused_name}` : matter.title}
             </h2>
             <p style={{ fontSize: 13.5, color: "var(--text-muted)", marginTop: 6, fontWeight: 500 }}>
-              {matter.caseNo} &nbsp;&middot;&nbsp; 🏛️ {matter.court} &nbsp;&middot;&nbsp; 👥 Client: {matter.client} ({matter.clientLang})
+              {matter.fo_number || matter.caseNo} &nbsp;&middot;&nbsp; 🏛️ {matter.court && matter.court !== "Not set yet — run document analysis" ? matter.court : (matter.hearings && matter.hearings.length > 0 ? matter.hearings[0].court : "Not set yet — run document analysis")} &nbsp;&middot;&nbsp; 👥 Client: {matter.client_name || matter.client} ({matter.clientLang})
             </p>
           </div>
 
@@ -1326,19 +1337,10 @@ function CaseDetail({ matter, onBack, setCases, cases, onOpenDetail, onOpenDocum
                 onClick={() => setOpenFolder("documents")}
               />
 
-              {/* Folder 4: Notes Log Box */}
-              <FolderBoxCard 
-                title="Case Notes" 
-                desc="Read, write, and dictate notes" 
-                icon={Edit} 
-                badgeText={`${matter.notes?.length || 0} Notes`}
-                onClick={() => setOpenFolder("notes")}
-              />
-
               {/* Folder 5: AI Assistants Box */}
               <FolderBoxCard 
                 title="AI Assistant Tools" 
-                desc="Use AI to summarize files, translate, or check dates" 
+                desc="Use AI to draft documents, translate updates, search precedents, or check dates" 
                 icon={Activity} 
                 badgeText="5 AI Tools"
                 onClick={() => setOpenFolder("ai-tools")}
@@ -1390,34 +1392,131 @@ function CaseDetail({ matter, onBack, setCases, cases, onOpenDetail, onOpenDocum
             {openFolder === "brief" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <h3 className="serif" style={{ fontSize: 18, color: "var(--text-main)", margin: 0 }}>Case Brief Overview</h3>
-                <p style={{ fontSize: 14, color: "var(--text-main)", lineHeight: 1.5, margin: 0 }}>
-                  This litigation details a {matter.type} dispute regarding <b>{matter.title}</b> registered under docket <b>{matter.caseNo}</b>.
-                  The client, {matter.client}, communicates primarily in <b>{matter.clientLang}</b>. 
-                  Currently, the litigation is at the stage of <b>{matter.stages.find(s=>s.status==='active')?.name || 'Pending Trials'}</b>.
-                  The client requires periodic updates in <b>{matter.clientLang}</b>. 
-                </p>
+                {matter.brief ? (
+                  <div style={{ 
+                    fontSize: 14, 
+                    color: "var(--text-main)", 
+                    lineHeight: 1.6, 
+                    margin: 0, 
+                    whiteSpace: "pre-wrap",
+                    background: "rgba(0, 0, 0, 0.05)",
+                    padding: "16px",
+                    borderRadius: "var(--radius-md)",
+                    border: "1px solid var(--border-color)"
+                  }}>
+                    {matter.brief}
+                  </div>
+                ) : (
+                  <p style={{ fontSize: 14, color: "var(--text-muted)", lineHeight: 1.5, margin: 0, fontStyle: "italic" }}>
+                    No brief yet — run document analysis.
+                  </p>
+                )}
 
                 <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: 16, marginTop: 8 }}>
                   <h4 style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text-muted)", marginBottom: 12 }}>Docket Parameters</h4>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                     <div>
                       <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)" }}>Case / FIR Number</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-main)" }}>{matter.caseNo}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-main)" }}>
+                        {matter.fo_number || matter.caseNo}
+                      </span>
                     </div>
                     <div>
                       <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)" }}>Jurisdiction Court</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-main)" }}>{matter.court}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-main)" }}>
+                        {matter.court && matter.court !== "Not set yet — run document analysis" ? matter.court : (matter.hearings && matter.hearings.length > 0 ? matter.hearings[0].court : "Not set yet — run document analysis")}
+                      </span>
                     </div>
                     <div>
-                      <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)" }}>Client Name</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-main)" }}>{matter.client}</span>
+                      <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)" }}>Parties (Complainant vs Accused)</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-main)" }}>
+                        {matter.complainant_name && matter.accused_name 
+                          ? `${matter.complainant_name} vs ${matter.accused_name}` 
+                          : (matter.complainant_name || matter.accused_name || matter.client)}
+                      </span>
                     </div>
                     <div>
-                      <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)" }}>Client Language</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-main)" }}>{matter.clientLang}</span>
+                      <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)" }}>Next Hearing Date</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-main)" }}>
+                        {matter.hearings && matter.hearings.length > 0 
+                          ? matter.hearings[0].hearing_date 
+                          : (matter.nextDate || "None")}
+                      </span>
                     </div>
                   </div>
                 </div>
+
+                {/* Named Sections */}
+                {matter.named_sections && matter.named_sections.length > 0 && (
+                  <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: 16, marginTop: 8 }}>
+                    <h4 style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text-muted)", marginBottom: 12 }}>
+                      Sections Named in Document
+                    </h4>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {matter.named_sections.map((sec, idx) => (
+                        <div 
+                          key={idx}
+                          style={{
+                            background: "var(--bg-app)",
+                            border: "1px solid var(--border-color)",
+                            borderRadius: "var(--radius-md)",
+                            padding: "10px 14px",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 4
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <CheckCircle2 size={14} color="var(--alert-green)" />
+                            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-main)" }}>
+                              {sec.section}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: 11.5, color: "var(--text-muted)", fontStyle: "italic" }}>
+                            "{sec.quote}"
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Suggested Sections */}
+                {matter.suggested_sections && matter.suggested_sections.length > 0 && (
+                  <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: 16, marginTop: 8 }}>
+                    <h4 style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text-muted)", marginBottom: 12 }}>
+                      AI Suggested Sections
+                    </h4>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      {matter.suggested_sections.map((sec, idx) => (
+                        <div 
+                          key={idx}
+                          style={{
+                            background: "var(--alert-yellow-bg)",
+                            border: "1.5px dashed var(--gold)",
+                            borderRadius: "var(--radius-md)",
+                            padding: "12px 14px",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 6
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text-main)" }}>
+                              {sec.section}
+                            </span>
+                            <span style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600 }}>
+                              Label: {sec.label}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: 11.5, color: "var(--text-main)", fontStyle: "italic", margin: 0 }}>
+                            Basis Fact: "{sec.basis_fact}"
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1467,7 +1566,48 @@ function CaseDetail({ matter, onBack, setCases, cases, onOpenDetail, onOpenDocum
 
                 {/* Deadlines list */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {matter.deadlines && matter.deadlines.length > 0 ? (
+                  {matter.hearings && matter.hearings.length > 0 ? (
+                    matter.hearings.map((h, i) => {
+                      return (
+                        <div key={i} style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          background: "var(--bg-app)",
+                          border: "1px solid var(--border-color)",
+                          borderRadius: "var(--radius-md)",
+                          padding: "12px 16px"
+                        }}>
+                          <Clock size={16} color="var(--gold)" />
+                          
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text-main)" }}>
+                              {h.hearing_type || "Hearing"}
+                            </div>
+                            <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2 }}>
+                              🏛️ {h.court || h.location || "Court Room"}
+                            </div>
+                          </div>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                            <div style={{ fontSize: 13, color: "var(--text-main)", fontWeight: 600 }}>{h.hearing_date}</div>
+                            <span style={{
+                              fontSize: 9,
+                              textTransform: "uppercase",
+                              letterSpacing: "0.05em",
+                              fontWeight: 700,
+                              padding: "3px 8px",
+                              borderRadius: "10px",
+                              background: "var(--alert-green-bg)",
+                              color: "var(--alert-green)"
+                            }}>
+                              HEARING
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : matter.deadlines && matter.deadlines.length > 0 ? (
                     matter.deadlines.map((d, i) => {
                       const r = RISK_STYLES[d.risk] || RISK_STYLES.prep;
                       return (
@@ -1546,33 +1686,88 @@ function CaseDetail({ matter, onBack, setCases, cases, onOpenDetail, onOpenDocum
                 {/* Document Registry List */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {matter.documents && matter.documents.length > 0 ? (
-                    matter.documents.map((doc, idx) => (
-                      <div key={idx} style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        background: "var(--bg-app)",
-                        border: "1px solid var(--border-color)",
-                        borderRadius: "var(--radius-md)",
-                        padding: "10px 12px"
-                      }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <FileCheck size={16} color="var(--primary)" />
-                          <div>
-                            <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-main)" }}>{doc.name}</div>
-                            <span style={{ fontSize: 10.5, color: "var(--text-muted)" }}>{doc.size} &nbsp;&middot;&nbsp; Added {doc.date}</span>
-                          </div>
-                        </div>
+                    matter.documents.map((doc, idx) => {
+                      const isSavedDoc = !!doc.file_url;
+                      return (
+                        <div key={idx} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          <div style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            background: "var(--bg-app)",
+                            border: "1px solid var(--border-color)",
+                            borderRadius: "var(--radius-md)",
+                            padding: "10px 12px"
+                          }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                              <FileCheck size={16} color="var(--primary)" />
+                              <div>
+                                {isSavedDoc ? (
+                                  <a 
+                                    href={doc.file_url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    style={{ 
+                                      fontSize: 12.5, 
+                                      fontWeight: 600, 
+                                      color: "var(--primary)",
+                                      textDecoration: "underline",
+                                      cursor: "pointer"
+                                    }}
+                                  >
+                                    {doc.file_name}
+                                  </a>
+                                ) : (
+                                  <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-main)" }}>
+                                    {doc.name}
+                                  </div>
+                                )}
+                                <span style={{ display: "block", fontSize: 10.5, color: "var(--text-muted)", marginTop: 2 }}>
+                                  {isSavedDoc 
+                                    ? `${doc.doc_type || "Document"} · Added ${new Date(doc.uploaded_at || doc.created_at).toLocaleDateString("en-GB")}`
+                                    : `${doc.size} · Added ${doc.date}`}
+                                </span>
+                              </div>
+                            </div>
 
-                        <button 
-                          className="btn-secondary" 
-                          style={{ padding: "4px 8px", fontSize: 10 }}
-                          onClick={() => onOpenDocumentAnalysis(matter.id)}
-                        >
-                          Extract Brief
-                        </button>
-                      </div>
-                    ))
+                            <button 
+                              className="btn-secondary" 
+                              style={{ padding: "4px 8px", fontSize: 10 }}
+                              onClick={() => setExplainingDocIdx(explainingDocIdx === idx ? null : idx)}
+                            >
+                              {explainingDocIdx === idx ? "Hide Brief" : "Explain briefly"}
+                            </button>
+                          </div>
+
+                          {explainingDocIdx === idx && (
+                            <div style={{
+                              background: "var(--bg-card)",
+                              border: "1px solid var(--border-color)",
+                              borderRadius: "var(--radius-md)",
+                              padding: "14px",
+                              boxShadow: "var(--shadow-sm)",
+                              fontSize: "12.5px",
+                              lineHeight: "1.5",
+                              color: "var(--text-main)",
+                              borderLeft: "3.5px solid var(--gold)"
+                            }}>
+                              <span style={{ display: "block", fontSize: 10.5, fontWeight: 700, color: "var(--gold)", textTransform: "uppercase", marginBottom: 6 }}>
+                                Document Summary Brief
+                              </span>
+                              {matter.brief ? (
+                                <div style={{ whiteSpace: "pre-wrap" }}>
+                                  {matter.brief}
+                                </div>
+                              ) : (
+                                <div style={{ color: "var(--text-muted)", fontStyle: "italic" }}>
+                                  No summary brief available for this document yet. Please run Document Analysis to extract the case details.
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
                   ) : (
                     <div style={{ padding: "20px", textAlign: "center", background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", fontSize: 12, color: "var(--text-muted)" }}>
                       No files loaded. Propose scans or docket updates.
@@ -1582,77 +1777,6 @@ function CaseDetail({ matter, onBack, setCases, cases, onOpenDetail, onOpenDocum
               </div>
             )}
 
-            {openFolder === "notes" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                <h3 className="serif" style={{ fontSize: 18, color: "var(--text-main)", margin: 0 }}>Advocate Notes Log</h3>
-
-                {/* Add note text entries */}
-                <form onSubmit={handleAddNote} style={{
-                  background: "var(--bg-app)",
-                  borderRadius: "var(--radius-md)",
-                  border: "1px solid var(--border-color)",
-                  padding: "16px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12
-                }}>
-                  <textarea 
-                    className="input-field" 
-                    rows={3} 
-                    required
-                    placeholder="Record verbal admissions, court scheduling details, or local counselor instructions here..."
-                    value={noteText}
-                    onChange={(e) => setNoteText(e.target.value)}
-                    style={{ resize: "vertical", fontSize: 13 }}
-                  />
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                      Sanitized by CourtSaarthi AI
-                    </span>
-                    
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button 
-                        type="button" 
-                        className="btn-secondary" 
-                        style={{ padding: "6px 12px", fontSize: 12 }}
-                        onClick={() => { setOpenFolder("ai-tools"); setActiveTool({ id: "dictate", icon: Mic, name: "Dictate a note" }); }}
-                      >
-                        <Mic size={13} style={{ marginRight: 4 }} /> Dictate Note
-                      </button>
-                      <button type="submit" className="btn-primary" style={{ padding: "6px 14px", fontSize: 12 }}>
-                        <Save size={13} style={{ marginRight: 4 }} /> File Note
-                      </button>
-                    </div>
-                  </div>
-                </form>
-
-                {/* Notes List */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {matter.notes && matter.notes.length > 0 ? (
-                    matter.notes.map((note, idx) => (
-                      <div key={idx} style={{
-                        background: "var(--bg-app)",
-                        border: "1px solid var(--border-color)",
-                        borderRadius: "var(--radius-md)",
-                        padding: "12px 14px"
-                      }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-muted)", marginBottom: 6, fontWeight: 600 }}>
-                          <span>👤 {note.author}</span>
-                          <span>🗓️ Filed {note.date}</span>
-                        </div>
-                        <p style={{ fontSize: 12.5, color: "var(--text-main)", lineHeight: 1.4, whiteSpace: "pre-line", margin: 0 }}>
-                          {note.content}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <div style={{ padding: "20px", textAlign: "center", color: "var(--text-muted)" }}>
-                      No advocate notes recorded. File logs above.
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
 
             {openFolder === "ai-tools" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -1667,6 +1791,8 @@ function CaseDetail({ matter, onBack, setCases, cases, onOpenDetail, onOpenDocum
                         onClick={() => {
                           if (t.id === "summarize_extract") {
                             onOpenDocumentAnalysis(matter.id);
+                          } else if (t.id === "draft_document") {
+                            onOpenDocumentDrafter(matter.id);
                           } else {
                             setActiveTool(t);
                           }
@@ -1915,10 +2041,10 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const audioIntervalRef = useRef(null);
 
-  // Dictation Notes States
-  const [isRecording, setIsRecording] = useState(false);
-  const [transcribedText, setTranscribedText] = useState("");
-  const transcriptionTimerRef = useRef(null);
+  // AI Drafter States
+  const [draftText, setDraftText] = useState("");
+  const [isCopied, setIsCopied] = useState(false);
+  const [draftError, setDraftError] = useState(null);
 
   // Search Past Cases States
   const [searchCaseQuery, setSearchCaseQuery] = useState("");
@@ -1930,11 +2056,48 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
 
   const Icon = tool.icon;
 
-  // Cleanup timers
+  // Voice Dictation and Real Audio States/Refs
+  const [isRecording, setIsRecording] = useState(false);
+  const [transcribedText, setTranscribedText] = useState("");
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const audioRef = useRef(null);
+
+  // Helper function for translating updates via backend API
+  const performTranslation = async (text, targetLang) => {
+    try {
+      const res = await fetch("http://localhost:8000/api/sarvam/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: text,
+          target_language: targetLang
+        })
+      });
+      const json = await res.json();
+      if (json.success) {
+        setTranslatedText(json.translated_text);
+      } else {
+        throw new Error(json.error || "Translation failed");
+      }
+    } catch (err) {
+      console.error("Translation error:", err);
+      // Fallback
+      setTranslatedText(getFallbackTranslation(text, targetLang));
+    }
+  };
+
+  // Cleanup timers, audio and recorders on unmount or tool change
   useEffect(() => {
     return () => {
       if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
-      if (transcriptionTimerRef.current) clearInterval(transcriptionTimerRef.current);
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      }
     };
   }, []);
 
@@ -1942,30 +2105,27 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
   useEffect(() => {
     setToolState("idle");
     setTranslatedText("");
+    setIsRecording(false);
+    setTranscribedText("");
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+
+    if (tool.id === "draft_builder") {
+      setDraftText("");
+      setIsCopied(false);
+      setDraftError(null);
+    }
     if (tool.id === "client") {
       const initialText = tool.prefilledText || `Your bail hearing has been successfully listed in front of Judge Rao at the Hyderabad Sessions Court for 18 July 2025. Please arrive by 10 AM with your physical Aadhaar card and salary slip.`;
       setClientUpdateEnglish(initialText);
       
-      // Auto-trigger translation simulation if it is a prefilled message handoff
+      // Auto-trigger translation if it is a prefilled message handoff
       if (tool.prefilledText) {
         setToolState("loading");
-        const timer = setTimeout(() => {
+        performTranslation(initialText, clientLanguage).then(() => {
           setToolState("complete");
-          const isCanned = initialText.includes("18 July 2025") || initialText.includes("18 జూలై 2025") || initialText.includes("18 जुलाई 2025");
-          if (isCanned) {
-            const translations = {
-              Hindi: `आपका जमानत आवेदन 18 जुलाई 2025 को हैदराबाद सत्र न्यायालय में न्यायाधीश राव के समक्ष सूचीबद्ध किया गया है। कृपया अपने मूल आधार कार्ड और वेतन पर्ची के साथ सुबह 10 बजे तक पहुंचें।`,
-              Telugu: `మీ బెయిల్ పిటిషన్ 18 జూలై 2025 న హైదరాబాద్ సెషన్స్ కోర్టులో జడ్జి రావు గారి ఎదుట లిస్ట్ చేయబడింది. దయచేసి మీ ఒరిజినల్ ఆధార్ కార్డు మరియు జీతం స్లిప్ తో ఉదయం 10 గంటలకల్లా హాజరుకావాలి.`,
-              Urdu: `آپ کی ضمانت کی سماعت 18 جولائی 2025 کو حیدرآباد سیشن کورٹ میں جج راؤ کے سامنے درج کی گئی ہے۔ براہ کرم صبح 10 بجے تک اپنے اصلی آدھار کارڈ اور تنخواہ کی پرچی کے ساتھ پہنچیں۔`,
-              Tamil: `உங்கள் ஜாமீன் மனு ஜூலை 18, 2025 அன்று ஹைதராபாத் செஷன்ஸ் நீதிமன்றத்தில் நீதிபதி ராவ் முன்னிலையில் பட்டியliடப்பட்டுள்ளது. தயவுசெய்து உங்கள் அசல் ஆதார் அட்டை மற்றும் சம்பள சீட்டுடன் காலை 10 மணிக்குள் வரவும்.`,
-              English: initialText
-            };
-            setTranslatedText(translations[clientLanguage] || translations["Hindi"]);
-          } else {
-            setTranslatedText(getFallbackTranslation(initialText, clientLanguage));
-          }
-        }, 1000);
-        return () => clearTimeout(timer);
+        });
       }
     }
     if (tool.id === "deadlines") {
@@ -1978,6 +2138,26 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
   // Run AI Simulation
   const handleLaunchTool = async () => {
     setToolState("loading");
+    setDraftError(null);
+    
+    if (tool.id === "draft_builder") {
+      try {
+        const res = await fetch(`http://localhost:8000/api/cases/${matter.id}/draft-bail`, {
+          method: "POST"
+        });
+        const json = await res.json();
+        if (!json.success) {
+          throw new Error(json.error || "Failed to generate draft");
+        }
+        setDraftText(json.data.draft_text);
+        setToolState("complete");
+      } catch (err) {
+        console.error(err);
+        setDraftError(err.message || "Failed to generate draft. Please ensure the case has details extracted from document analysis.");
+        setToolState("idle");
+      }
+      return;
+    }
     
     if (tool.id === "deadlines") {
       try {
@@ -2006,28 +2186,11 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
       return;
     }
     
-    // Simulate API delay for other tools
-    setTimeout(() => {
+    if (tool.id === "client") {
+      await performTranslation(clientUpdateEnglish, clientLanguage);
       setToolState("complete");
-      
-      // Calculate outputs based on tools
-      if (tool.id === "client") {
-        // Check if using the canned text or a newly drafted text
-        const isCanned = clientUpdateEnglish.includes("18 July 2025") || clientUpdateEnglish.includes("18 జూలై 2025") || clientUpdateEnglish.includes("18 जुलाई 2025");
-        if (isCanned) {
-          const translations = {
-            Hindi: `आपका जमानत आवेदन 18 जुलाई 2025 को हैदराबाद सत्र न्यायालय में न्यायाधीश राव के समक्ष सूचीबद्ध किया गया है। कृपया अपने मूल आधार कार्ड और वेतन पर्ची के साथ सुबह 10 बजे तक पहुंचें।`,
-            Telugu: `మీ బెయిల్ పిటిషన్ 18 జూలై 2025 న హైదరాబాద్ సెషన్స్ కోర్టులో జడ్జి రావు గారి ఎదుట లిస్ట్ చేయబడింది. దయచేసి మీ ఒరిజినల్ ఆధార్ కార్డు మరియు జీతం స్లిప్ తో ఉదయం 10 గంటలకల్లా హాజరుకావాలి.`,
-            Urdu: `آپ کی ضمانت کی سماعت 18 جولائی 2025 کو حیدرآباد سیشن کورٹ میں جج راؤ کے سامنے درج کی گئی ہے۔ براہ کرم صبح 10 بجے تک اپنے اصلی آدھار کارڈ اور تنخواہ کی پرچی کے ساتھ پہنچیں۔`,
-            Tamil: `உங்கள் ஜாமீன் மனு ஜூலை 18, 2025 அன்று ஹைதராபாத் செஷன்ஸ் நீதிமன்றத்தில் நீதிபதி ராவ் முன்னிலையில் பட்டியலிடப்பட்டுள்ளது. தயவுசெய்து உங்கள் அசல் ஆதார் அட்டை மற்றும் சம்பள சீட்டுடன் காலை 10 மணிக்குள் வரவும்.`,
-            English: clientUpdateEnglish
-          };
-          setTranslatedText(translations[clientLanguage] || translations["Hindi"]);
-        } else {
-          setTranslatedText(getFallbackTranslation(clientUpdateEnglish, clientLanguage));
-        }
-      }
-    }, 2000);
+      return;
+    }
   };
 
   const addDays = (date, days) => {
@@ -2036,34 +2199,60 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
     return result.toISOString().split("T")[0];
   };
 
-  // Mock Dictation Dictator
-  const startRecording = () => {
-    setIsRecording(true);
-    setTranscribedText("");
-    
-    const words = [
-      "Case note compiled. ",
-      "Conducted physical inspection of disputed family boundary in Hyderabad. ",
-      "Petitioner asserts respondent built illegal brick wall. ",
-      "Photographs taken and registered. ",
-      "Spoke with client who confirmed compromise terms are acceptable. ",
-      "Will submit joint memo on next hearing."
-    ];
-    
-    let currentIdx = 0;
-    transcriptionTimerRef.current = setInterval(() => {
-      if (currentIdx < words.length) {
-        setTranscribedText(prev => prev + words[currentIdx]);
-        currentIdx++;
-      } else {
-        clearInterval(transcriptionTimerRef.current);
-        setIsRecording(false);
-      }
-    }, 1200);
+  // Real Speech-to-Text (STT) Recorder using MediaRecorder API
+  const startRealRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/wav" });
+        setToolState("loading");
+        try {
+          const formData = new FormData();
+          formData.append("file", audioBlob, "recording.wav");
+          const response = await fetch("http://localhost:8000/api/sarvam/stt", {
+            method: "POST",
+            body: formData,
+          });
+          const result = await response.json();
+          if (result.success) {
+            setTranscribedText(result.transcript);
+            setToolState("complete");
+          } else {
+            console.error("STT error:", result.error);
+            setTranscribedText("Error transcribing audio: " + result.error);
+            setToolState("complete");
+          }
+        } catch (err) {
+          console.error("STT error:", err);
+          setTranscribedText("Error connecting to STT service: " + err.message);
+          setToolState("complete");
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setTranscribedText("");
+    } catch (err) {
+      console.error("Failed to start recording:", err);
+      alert("Microphone access is required for voice dictation. Please ensure permission is granted.");
+    }
   };
 
-  const stopRecording = () => {
-    if (transcriptionTimerRef.current) clearInterval(transcriptionTimerRef.current);
+  const stopRealRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
+    }
     setIsRecording(false);
   };
 
@@ -2223,70 +2412,88 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
             )}
 
             {tool.id === "dictate" && (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20, padding: "20px 0" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "center", padding: "20px 0" }}>
+                <div 
+                  onClick={isRecording ? stopRealRecording : startRealRecording}
+                  style={{
+                    width: 72,
+                    height: 72,
+                    borderRadius: "50%",
+                    background: isRecording ? "var(--alert-red-bg)" : "rgba(27, 61, 51, 0.1)",
+                    border: isRecording ? "2px solid var(--alert-red)" : "2px solid var(--primary)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    boxShadow: isRecording ? "0 0 15px rgba(168, 61, 34, 0.3)" : "none",
+                    transition: "all var(--transition-fast)"
+                  }}
+                >
+                  {isRecording ? <Square size={24} color="var(--alert-red)" /> : <Mic size={28} color="var(--primary)" />}
+                </div>
+
                 <div style={{ textAlign: "center" }}>
-                  <h4 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-main)" }}>AI Voice Recognition</h4>
-                  <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4 }}>
-                    Tap start and speak. Describe case facts or schedule updates in Hindi-English mixed vocabulary.
+                  <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text-main)" }}>
+                    {isRecording ? "Recording... Click to Stop" : "Click to Start Voice Dictation"}
+                  </span>
+                  <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6, maxWidth: 280, margin: "6px auto 0" }}>
+                    Speak naturally in Hindi, Telugu, Tamil, Urdu, or English. Sarvam AI will transcribe it.
                   </p>
                 </div>
 
-                {!isRecording ? (
-                  <button 
-                    onClick={startRecording}
-                    style={{
-                      width: 80, height: 80, borderRadius: "50%", background: "var(--alert-red-bg)", border: "2px solid var(--alert-red)",
-                      display: "flex", alignItems: "center", cursor: "pointer", outline: "none",
-                      boxShadow: "0 4px 12px rgba(168, 61, 34, 0.2)"
-                    }}
-                  >
-                    <Mic size={32} color="var(--alert-red)" style={{ margin: "0 auto" }} />
-                  </button>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
-                    {/* Visual Sound Wave */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 3, height: 40 }}>
-                      <div className="soundwave-bar" />
-                      <div className="soundwave-bar" />
-                      <div className="soundwave-bar" />
-                      <div className="soundwave-bar" />
-                      <div className="soundwave-bar" />
-                      <div className="soundwave-bar" />
-                      <div className="soundwave-bar" />
+                {isRecording && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, height: 16, marginTop: 8 }}>
+                    <div className="soundwave-bar" style={{ height: 12, animationDuration: "0.8s" }} />
+                    <div className="soundwave-bar" style={{ height: 6, animationDuration: "1.1s" }} />
+                    <div className="soundwave-bar" style={{ height: 14, animationDuration: "0.7s" }} />
+                    <div className="soundwave-bar" style={{ height: 8, animationDuration: "0.9s" }} />
+                    <div className="soundwave-bar" style={{ height: 12, animationDuration: "1.2s" }} />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {tool.id === "draft_builder" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "var(--gold)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Draft Parameters</span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12 }}>
+                    <div>
+                      <span style={{ color: "var(--text-muted)", fontWeight: 500 }}>Accused / Client: </span>
+                      <span style={{ color: "var(--text-main)", fontWeight: 600 }}>{matter.accused_name || matter.client_name || matter.client || "Not set yet"}</span>
                     </div>
-                    
-                    <button 
-                      onClick={stopRecording}
-                      className="btn-primary"
-                      style={{ background: "var(--alert-red)", color: "white", padding: "6px 14px" }}
-                    >
-                      <Square size={12} style={{ marginRight: 4 }} /> Stop Listening
-                    </button>
+                    <div>
+                      <span style={{ color: "var(--text-muted)", fontWeight: 500 }}>IPC / BNS Sections: </span>
+                      <span style={{ color: "var(--text-main)", fontWeight: 600 }}>{matter.ipc_sections && matter.ipc_sections.length > 0 ? matter.ipc_sections.join(", ") : "None extracted yet"}</span>
+                    </div>
+                    <div>
+                      <span style={{ color: "var(--text-muted)", fontWeight: 500 }}>Jurisdiction Court: </span>
+                      <span style={{ color: "var(--text-main)", fontWeight: 600 }}>{matter.court && matter.court !== "Not set yet — run document analysis" ? matter.court : (matter.hearings && matter.hearings.length > 0 ? matter.hearings[0].court : "None extracted yet")}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {(!matter.ipc_sections || matter.ipc_sections.length === 0) && (
+                  <div style={{ display: "flex", gap: 8, background: "var(--alert-yellow-bg)", border: "1px dashed var(--gold)", padding: "10px 12px", borderRadius: "6px", fontSize: 11.5, color: "var(--gold)" }}>
+                    <Info size={14} style={{ flexShrink: 0, marginTop: 2 }} />
+                    <span>Some parameters are missing. Running "Summarize & Extract Details" first is recommended for highly accurate drafts.</span>
                   </div>
                 )}
 
-                {transcribedText && (
-                  <div style={{
-                    width: "100%", background: "var(--bg-app)", border: "1px solid var(--border-color)",
-                    borderRadius: "var(--radius-md)", padding: "14px", display: "flex", flexDirection: "column", gap: 10
-                  }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)" }}>LIVE TRANSLATION</span>
-                    <p style={{ fontSize: 12.5, color: "var(--text-main)", margin: 0, fontStyle: "italic", lineHeight: 1.4 }}>
-                      "{transcribedText}"
-                    </p>
-                    <button 
-                      type="button" 
-                      className="btn-primary" 
-                      style={{ padding: "6px 12px", fontSize: 11, alignSelf: "flex-end" }}
-                      onClick={() => {
-                        onAddNote(transcribedText);
-                        onClose();
-                      }}
-                    >
-                      Save to Advocate Log
-                    </button>
+                {draftError && (
+                  <div style={{ background: "var(--alert-red-bg)", border: "1px solid var(--alert-red)", padding: "10px 12px", borderRadius: "6px", fontSize: 12, color: "var(--alert-red)" }}>
+                    {draftError}
                   </div>
                 )}
+
+                <button 
+                  type="button" 
+                  className="btn-primary" 
+                  onClick={handleLaunchTool}
+                  style={{ width: "100%", justifyContent: "center" }}
+                >
+                  Generate Bail Application Draft
+                </button>
               </div>
             )}
           </div>
@@ -2373,6 +2580,77 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
                 >
                   <Globe size={14} style={{ marginRight: 6 }} /> Open Client Translator
                 </button>
+              </div>
+            )}
+
+            {tool.id === "draft_builder" && draftText && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{
+                  background: "var(--alert-green-bg)", color: "var(--alert-green)", border: "1px solid rgba(41,96,67,0.15)",
+                  padding: "10px 14px", borderRadius: "8px", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 8
+                }}>
+                  <CheckCircle2 size={16} /> Legal Draft Generated Successfully
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-muted)", display: "flex", justifyContent: "space-between" }}>
+                    <span>BAIL APPLICATION DRAFT</span>
+                    <span style={{ fontSize: 10, color: "var(--primary)" }}>
+                      Editable
+                    </span>
+                  </label>
+                  
+                  <textarea
+                    className="input-field"
+                    rows={12}
+                    value={draftText}
+                    onChange={(e) => setDraftText(e.target.value)}
+                    style={{
+                      fontFamily: "monospace",
+                      fontSize: "12px",
+                      lineHeight: "1.5",
+                      background: "var(--bg-app)",
+                      color: "var(--text-main)",
+                      padding: "12px",
+                      borderRadius: "var(--radius-md)",
+                      border: "1px solid var(--border-color)",
+                      resize: "vertical"
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button 
+                    type="button" 
+                    className="btn-secondary" 
+                    style={{ flex: 1, padding: "10px", justifyContent: "center" }}
+                    onClick={() => {
+                      navigator.clipboard.writeText(draftText);
+                      setIsCopied(true);
+                      setTimeout(() => setIsCopied(false), 2000);
+                    }}
+                  >
+                    {isCopied ? <Check size={14} color="var(--alert-green)" /> : <FileText size={14} />}
+                    <span style={{ marginLeft: 6 }}>{isCopied ? "Copied!" : "Copy Text"}</span>
+                  </button>
+
+                  <button 
+                    type="button" 
+                    className="btn-primary" 
+                    style={{ flex: 1, padding: "10px", justifyContent: "center" }}
+                    onClick={() => {
+                      const element = document.createElement("a");
+                      const file = new Blob([draftText], {type: 'text/plain'});
+                      element.href = URL.createObjectURL(file);
+                      element.download = `bail_application_draft_${matter.id}.txt`;
+                      document.body.appendChild(element);
+                      element.click();
+                      document.body.removeChild(element);
+                    }}
+                  >
+                    <span>Download (.txt)</span>
+                  </button>
+                </div>
               </div>
             )}
 
@@ -2496,19 +2774,41 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
                     
                     <button 
                       type="button" 
-                      onClick={() => {
-                        setIsPlayingAudio(!isPlayingAudio);
-                        if (!isPlayingAudio) {
-                          let count = 0;
-                          audioIntervalRef.current = setInterval(() => {
-                            count++;
-                            if (count > 20) {
-                              setIsPlayingAudio(false);
-                              clearInterval(audioIntervalRef.current);
-                            }
-                          }, 500);
+                      onClick={async () => {
+                        if (isPlayingAudio) {
+                          if (audioRef.current) {
+                            audioRef.current.pause();
+                          }
+                          setIsPlayingAudio(false);
                         } else {
-                          if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
+                          setIsPlayingAudio(true);
+                          try {
+                            const res = await fetch("http://localhost:8000/api/sarvam/tts", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                text: translatedText,
+                                language: clientLanguage
+                              })
+                            });
+                            if (!res.ok) throw new Error("TTS generation failed");
+                            const blob = await res.blob();
+                            const audioUrl = URL.createObjectURL(blob);
+                            
+                            if (audioRef.current) {
+                              audioRef.current.pause();
+                            }
+                            
+                            const audio = new Audio(audioUrl);
+                            audioRef.current = audio;
+                            audio.onended = () => {
+                              setIsPlayingAudio(false);
+                            };
+                            audio.play();
+                          } catch (err) {
+                            console.error("Failed to play audio:", err);
+                            setIsPlayingAudio(false);
+                          }
                         }
                       }}
                       className="btn-secondary" 
@@ -2548,6 +2848,40 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
                     onClose();
                   }}>
                     Send & Log Update
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {tool.id === "dictate" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{
+                  background: "var(--alert-green-bg)", color: "var(--alert-green)", border: "1px solid rgba(41,96,67,0.15)",
+                  padding: "10px 14px", borderRadius: "8px", fontSize: 12, display: "flex", alignItems: "center", gap: 8, fontWeight: 600
+                }}>
+                  <CheckCircle2 size={16} /> Transcription Complete
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-muted)" }}>REVIEW / EDIT NOTE</label>
+                  <textarea
+                    className="input-field"
+                    rows={8}
+                    value={transcribedText}
+                    onChange={(e) => setTranscribedText(e.target.value)}
+                    style={{ fontSize: 13, lineHeight: 1.5 }}
+                  />
+                </div>
+
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button type="button" className="btn-secondary" style={{ flex: 1, padding: "8px" }} onClick={() => setToolState("idle")}>
+                    Record Again
+                  </button>
+                  <button type="button" className="btn-primary" style={{ flex: 2, padding: "8px" }} onClick={() => {
+                    onAddNote(transcribedText);
+                    onClose();
+                  }}>
+                    Save Note to Case
                   </button>
                 </div>
               </div>
@@ -3091,82 +3425,38 @@ function SettingsView() {
   );
 }
 
+// --- Document Analysis API Integration ---
+async function analyzeDocument(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch("http://localhost:8000/api/analyze", {
+    method: "POST",
+    body: formData,
+  });
+
+  const json = await res.json();
+
+  if (!json.success) {
+    throw new Error(json.error || "Analysis failed");
+  }
+
+  // The real result is nested under data.data because the backend wraps everything in ApiResponse
+  return json.data;   // this has { raw_text, facts, named_sections, suggested_sections }
+}
+
 // --- Full-page Document Analysis View ---
-function DocumentAnalysisView({ matter, onBack }) {
+function DocumentAnalysisView({ matter, onBack, onSaveAnalysis }) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [activeHighlightRange, setActiveHighlightRange] = useState(null);
+  const [fileName, setFileName] = useState("");
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [error, setError] = useState(null);
+  const [data, setData] = useState(null);
   
   const highlightRef = useRef(null);
-
-  const MOCK_FIR_TEXT = `FIRST INFORMATION REPORT
-(Under Section 154 CrPC)
-
-1. District: Hyderabad City
-PS: Nampally
-Year: 2025
-FIR No: 0123/2025
-Date: 12/05/2025
-
-2. Acts and Sections:
-- Bharatiya Nyaya Sanhita (BNS) Section 318 (Cheating)
-- Bharatiya Nyaya Sanhita (BNS) Section 324 (Mischief causing damage)
-
-3. Occurrence of Offence:
-Date: 10/05/2025
-Time: Around 11:00 PM
-Location: Nampally, Hyderabad
-
-4. Complainant / Informant:
-Name: Suresh Kumar
-Address: Nampally, Hyderabad.
-
-5. Details of Accused:
-Accused: Rahul Kumar
-
-6. Brief Facts of the Case:
-On 10/05/2025, around 11:00 PM, the accused Rahul Kumar approached the complainant Suresh Kumar regarding a financial transaction. The accused Rahul Kumar cheated the complainant (BNS Section 318) by promising a false high return and securing funds under fraudulent representations. When confronted, Rahul Kumar engaged in a heated dispute, snatched the complainant's phone, and threw it to the ground, committing mischief causing damage under BNS Section 324.
-
-7. Action Taken:
-Case registered under relevant provisions of BNS. Default chargesheet clock is set for 90 days. Next bail hearing is listed on 18/07/2025 at the Hyderabad Sessions Court.`;
-
-  const getMockAnalysisData = () => {
-    const text = MOCK_FIR_TEXT;
-    
-    const getSpan = (substring) => {
-      const idx = text.indexOf(substring);
-      if (idx === -1) return [-1, -1];
-      return [idx, idx + substring.length];
-    };
-
-    return {
-      raw_text: text,
-      facts: {
-        case_number: { label: "Case File Number", value: "FIR 0123/2025", quote: "FIR No: 0123/2025", verified: true, span: getSpan("FIR No: 0123/2025") },
-        complainant: { label: "Complainant", value: "Suresh Kumar", quote: "Name: Suresh Kumar", verified: true, span: getSpan("Name: Suresh Kumar") },
-        accused: { label: "Accused Party", value: "Rahul Kumar", quote: "Accused: Rahul Kumar", verified: true, span: getSpan("Accused: Rahul Kumar") },
-        hearing_date: { label: "Hearing Date", value: "18/07/2025", quote: "listed on 18/07/2025", verified: true, span: getSpan("listed on 18/07/2025") },
-        court: { label: "Jurisdiction Court", value: "Hyderabad Sessions Court", quote: "Hyderabad Sessions Court", verified: true, span: getSpan("Hyderabad Sessions Court") },
-        unverified_fact: { label: "Weapon Recovered", value: "Iron Rod", quote: "Iron Rod", verified: false, span: getSpan("Iron Rod") }
-      },
-      named_sections: [
-        { section: "BNS 318", quote: "BNS Section 318", verified: true, span: getSpan("BNS Section 318") },
-        { section: "BNS 324", quote: "BNS Section 324", verified: true, span: getSpan("BNS Section 324") },
-        { section: "BNS 999", quote: "BNS 999 (Treason)", verified: false, span: getSpan("BNS 999 (Treason)") }
-      ],
-      suggested_sections: [
-        { 
-          section: "BNS 115", 
-          label: "voluntarily causing hurt",
-          basis_fact: "engaged in a heated dispute, snatched the complainant's phone, and threw it to the ground",
-          basis_span: getSpan("engaged in a heated dispute, snatched the complainant's phone, and threw it to the ground"), 
-          verified_basis: true,
-          disclaimer: "AI-suggested — verify against statute" 
-        }
-      ]
-    };
-  };
-
-  const data = getMockAnalysisData();
+  const fileInputRef = useRef(null);
 
   // Scroll to highlight element
   useEffect(() => {
@@ -3175,25 +3465,78 @@ Case registered under relevant provisions of BNS. Default chargesheet clock is s
     }
   }, [activeHighlightRange]);
 
-  const handleReanalyse = () => {
-    setIsAnalyzing(true);
-    setActiveHighlightRange(null);
-    setTimeout(() => {
-      setIsAnalyzing(false);
-    }, 1500);
+  const handleUploadClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
   };
 
-  // Check loading animation on mount
-  useEffect(() => {
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
     setIsAnalyzing(true);
-    const timer = setTimeout(() => {
+    setError(null);
+    setActiveHighlightRange(null);
+    setFileName(file.name);
+    setUploadedFile(file);
+    try {
+      const result = await analyzeDocument(file);
+      setData(result);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Failed to analyze document");
+    } finally {
       setIsAnalyzing(false);
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, []);
+      e.target.value = "";
+    }
+  };
+
+  const handleSaveToCase = async () => {
+    if (!uploadedFile || !data) return;
+    setIsSaving(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", uploadedFile);
+      
+      const payload = {
+        facts: data.facts || {},
+        named_sections: data.named_sections || [],
+        suggested_sections: data.suggested_sections || [],
+        raw_text: data.raw_text || "",
+        client_name: matter.client || "",
+        client_phone: matter.clientPhone || "",
+        client_address: matter.clientAddress || ""
+      };
+      formData.append("analysis_result", JSON.stringify(payload));
+
+      const res = await fetch(`http://localhost:8000/api/cases/${matter.id}/save-analysis`, {
+        method: "POST",
+        body: formData
+      });
+
+      const json = await res.json();
+      if (!json.success) {
+        throw new Error(json.error || "Failed to save analysis to case.");
+      }
+
+      alert("Saved to case successfully!");
+      if (onSaveAnalysis) {
+        onSaveAnalysis(json.data);
+      }
+      onBack();
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Failed to save analysis");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // Text rendering with highlight
   const renderDocumentText = () => {
+    if (!data || !data.raw_text) return null;
     if (!activeHighlightRange || activeHighlightRange[0] === -1 || activeHighlightRange[1] === -1) {
       return <div>{data.raw_text}</div>;
     }
@@ -3226,6 +3569,15 @@ Case registered under relevant provisions of BNS. Default chargesheet clock is s
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg-app)", overflow: "hidden" }}>
+      {/* Hidden File Input */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileChange} 
+        style={{ display: "none" }} 
+        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" 
+      />
+
       {/* Header */}
       <header style={{
         height: 70,
@@ -3272,23 +3624,42 @@ Case registered under relevant provisions of BNS. Default chargesheet clock is s
         {/* Document Title */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 18, fontWeight: 700, color: "var(--text-main)" }} className="serif">
-            FIR_0123_2025_Nampally.pdf
+            {fileName || "Document Analysis"}
           </span>
-          <span style={{ fontSize: 10, background: "var(--gold-bg)", color: "var(--gold)", padding: "2px 8px", borderRadius: "10px", fontWeight: 700 }}>
-            Verifiable Brief
-          </span>
+          {fileName && (
+            <span style={{ fontSize: 10, background: "var(--gold-bg)", color: "var(--gold)", padding: "2px 8px", borderRadius: "10px", fontWeight: 700 }}>
+              Verifiable Brief
+            </span>
+          )}
         </div>
 
-        {/* Re-analyse Button */}
-        <button 
-          onClick={handleReanalyse} 
-          className="btn-primary"
-          style={{ padding: "8px 16px" }}
-          disabled={isAnalyzing}
-        >
-          <UploadCloud size={16} />
-          <span>Upload / Re-analyse</span>
-        </button>
+        {/* Action Buttons */}
+        <div style={{ display: "flex", gap: 12 }}>
+          {data && (
+            <button 
+              onClick={handleSaveToCase} 
+              className="btn-primary"
+              style={{ 
+                padding: "8px 16px",
+                background: "var(--alert-green)",
+                color: "#ffffff"
+              }}
+              disabled={isSaving}
+            >
+              <span>{isSaving ? "Saving..." : "Save to Case"}</span>
+            </button>
+          )}
+
+          <button 
+            onClick={handleUploadClick} 
+            className="btn-secondary"
+            style={{ padding: "8px 16px" }}
+            disabled={isAnalyzing || isSaving}
+          >
+            <UploadCloud size={16} />
+            <span>Upload / Re-analyse</span>
+          </button>
+        </div>
       </header>
 
       {/* Main View Area */}
@@ -3301,10 +3672,67 @@ Case registered under relevant provisions of BNS. Default chargesheet clock is s
             animation: "spin 1s infinite linear"
           }} />
           <div style={{ textAlign: "center" }}>
-            <h4 className="serif" style={{ fontSize: 16, color: "var(--text-main)" }}>Verifying Brief Citations...</h4>
+            <h4 className="serif" style={{ fontSize: 16, color: "var(--text-main)" }}>Reading document...</h4>
             <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
-              Parsing statutory segments, mapping evidence parameters
+              Digitising transcription, verifying statutory coordinates
             </p>
+          </div>
+        </div>
+      ) : error ? (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 32 }}>
+          <AlertTriangle size={48} color="var(--alert-red)" />
+          <div style={{ textAlign: "center" }}>
+            <h4 className="serif" style={{ fontSize: 18, color: "var(--text-main)" }}>Analysis Failed</h4>
+            <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4, maxWidth: 400, margin: "4px auto 16px" }}>
+              {error}
+            </p>
+            <button className="btn-primary" onClick={handleUploadClick}>
+              <UploadCloud size={16} style={{ marginRight: 6 }} />
+              <span>Try Again</span>
+            </button>
+          </div>
+        </div>
+      ) : !data ? (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 32 }}>
+          <div style={{
+            background: "var(--bg-card)",
+            border: "1px solid var(--border-color)",
+            borderRadius: "var(--radius-lg)",
+            padding: "48px 32px",
+            maxWidth: "520px",
+            textAlign: "center",
+            boxShadow: "var(--shadow-sm)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 20
+          }}>
+            <div style={{
+              width: 64,
+              height: 64,
+              borderRadius: "50%",
+              background: "rgba(198, 155, 63, 0.1)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "var(--gold)"
+            }}>
+              <UploadCloud size={32} />
+            </div>
+            <div>
+              <h3 className="serif" style={{ fontSize: 22, color: "var(--text-main)", marginBottom: 8 }}>
+                Upload Case Document
+              </h3>
+              <p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5, margin: 0 }}>
+                Submit a litigation brief, FIR scan, or court order in PDF or image format. 
+                CourtSaarthi will digitise the document, extract key facts, and map statutory references with verifiable citation highlights.
+              </p>
+            </div>
+            
+            <button className="btn-primary" onClick={handleUploadClick} style={{ padding: "12px 24px", fontSize: 14 }}>
+              <UploadCloud size={18} style={{ marginRight: 6 }} />
+              <span>Select Document</span>
+            </button>
           </div>
         </div>
       ) : (
@@ -3366,8 +3794,22 @@ Case registered under relevant provisions of BNS. Default chargesheet clock is s
               </p>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                {Object.entries(data.facts).map(([key, fact]) => {
+                {data && data.facts && Object.entries(data.facts).map(([key, fact]) => {
                   const isVerified = fact.verified && fact.span && fact.span[0] !== -1;
+                  
+                  const getLabel = (k) => {
+                    if (fact.label) return fact.label;
+                    const mapping = {
+                      case_number: "Case File Number",
+                      court: "Jurisdiction Court",
+                      parties: "Parties Involved",
+                      hearing_date: "Next Hearing Date",
+                      complainant: "Complainant",
+                      accused: "Accused Party"
+                    };
+                    return mapping[k] || k.replace(/_/g, " ").toUpperCase();
+                  };
+
                   return (
                     <div 
                       key={key} 
@@ -3386,7 +3828,7 @@ Case registered under relevant provisions of BNS. Default chargesheet clock is s
                     >
                       <div>
                         <span style={{ display: "block", fontSize: 10.5, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.02em" }}>
-                          {fact.label}
+                          {getLabel(key)}
                         </span>
                         <span style={{ 
                           display: "block", 
@@ -3396,7 +3838,7 @@ Case registered under relevant provisions of BNS. Default chargesheet clock is s
                           marginTop: 4,
                           textDecoration: "none"
                         }}>
-                          {fact.value}
+                          {Array.isArray(fact.value) ? fact.value.join(" vs ") : fact.value}
                         </span>
                       </div>
                       
@@ -3436,7 +3878,7 @@ Case registered under relevant provisions of BNS. Default chargesheet clock is s
               </p>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {data.named_sections.map((sec, idx) => {
+                {data && data.named_sections && data.named_sections.map((sec, idx) => {
                   const isVerified = sec.verified && sec.span && sec.span[0] !== -1;
                   return (
                     <div 
@@ -3505,7 +3947,7 @@ Case registered under relevant provisions of BNS. Default chargesheet clock is s
               </p>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {data.suggested_sections.map((sec, idx) => {
+                {data && data.suggested_sections && data.suggested_sections.map((sec, idx) => {
                   return (
                     <div 
                       key={idx}
@@ -3553,14 +3995,21 @@ Case registered under relevant provisions of BNS. Default chargesheet clock is s
                       </div>
 
                       <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                        <button 
-                          onClick={() => setActiveHighlightRange(sec.basis_span)}
-                          className="btn-secondary"
-                          style={{ padding: "4px 8px", fontSize: 10.5, display: "flex", alignItems: "center", gap: 4, borderRadius: "6px" }}
-                        >
-                          <Search size={11} />
-                          <span>Cite Fact Basis</span>
-                        </button>
+                        {sec.basis_span && sec.basis_span[0] !== -1 ? (
+                          <button 
+                            onClick={() => setActiveHighlightRange(sec.basis_span)}
+                            className="btn-secondary"
+                            style={{ padding: "4px 8px", fontSize: 10.5, display: "flex", alignItems: "center", gap: 4, borderRadius: "6px" }}
+                          >
+                            <Search size={11} />
+                            <span>Cite Fact Basis</span>
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: 10.5, color: "var(--text-muted)", fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+                            <AlertTriangle size={12} color="var(--text-muted)" />
+                            <span>couldn't confirm basis in document</span>
+                          </span>
+                        )}
                       </div>
                     </div>
                   );
@@ -3571,6 +4020,498 @@ Case registered under relevant provisions of BNS. Default chargesheet clock is s
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// --- Document Drafter Page ---
+function DocumentDrafterView({ matter, onBack }) {
+  const [selectedDocs, setSelectedDocs] = useState([]);
+  const [docType, setDocType] = useState("bail_application");
+  const [isDrafting, setIsDrafting] = useState(false);
+  const [error, setError] = useState(null);
+  const [draftData, setDraftData] = useState(null);
+  const [isCopied, setIsCopied] = useState(false);
+
+  // Load jsPDF from CDN dynamically
+  useEffect(() => {
+    if (!window.jspdf) {
+      const script = document.createElement("script");
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+      script.async = true;
+      document.body.appendChild(script);
+    }
+  }, []);
+
+  const cleanDraftResponse = (data) => {
+    if (!data) return null;
+    let title = data.title || "Legal Draft";
+    let body = data.body || "";
+
+    // 1. Try parsing body if it's a JSON string
+    if (typeof body === "string" && body.trim().startsWith("{")) {
+      try {
+        const parsed = JSON.parse(body.trim());
+        if (parsed.body) {
+          body = parsed.body;
+        }
+        if (parsed.title) {
+          title = parsed.title;
+        }
+      } catch (e) {
+        console.error("Error parsing nested JSON in draft body:", e);
+      }
+    }
+
+    // 2. Perform aggressive cleaning of outer JSON artifacts in body
+    if (typeof body === "string") {
+      let cleaned = body.trim();
+      
+      // Strip markdown block wraps
+      cleaned = cleaned.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
+
+      // If it starts with { and we couldn't parse it as pure JSON
+      if (cleaned.startsWith("{")) {
+        cleaned = cleaned.replace(/^\{\s*["']title["']\s*:\s*["'].*?["']\s*,\s*["']body["']\s*:\s*["']/, "");
+        cleaned = cleaned.replace(/^\{\s*["']body["']\s*:\s*["']/, "");
+        cleaned = cleaned.replace(/^\{\s*["']draft["']\s*:\s*\{\s*["']body["']\s*:\s*["']/, "");
+        cleaned = cleaned.replace(/["']\s*\}\s*$/, "");
+        cleaned = cleaned.replace(/\s*\}\s*$/, "");
+      }
+
+      // Clean prefix tags
+      cleaned = cleaned.replace(/^["']?body["']?\s*:\s*["']?/, "");
+      cleaned = cleaned.replace(/^["']?title["']?\s*:\s*["']?.*?["']?\s*,\s*["']?body["']?\s*:\s*["']?/, "");
+
+      body = cleaned.trim();
+    }
+
+    return { ...data, title, body };
+  };
+
+  const handleDocCheckboxChange = (docId) => {
+    setSelectedDocs(prev => 
+      prev.includes(docId) 
+        ? prev.filter(id => id !== docId) 
+        : [...prev, docId]
+    );
+  };
+
+  const handleDraft = async () => {
+    if (selectedDocs.length === 0) {
+      setError("Please select at least one source document.");
+      return;
+    }
+
+    setIsDrafting(true);
+    setError(null);
+    setDraftData(null);
+
+    try {
+      const res = await fetch("http://localhost:8000/api/draft", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          doc_type: docType,
+          source_doc_ids: selectedDocs
+        })
+      });
+
+      const json = await res.json();
+      if (!json.success) {
+        throw new Error(json.error || "Failed to generate draft.");
+      }
+      const cleanedData = cleanDraftResponse(json.data);
+      setDraftData(cleanedData);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Failed to draft document.");
+    } finally {
+      setIsDrafting(false);
+    }
+  };
+
+  const handleDownloadPDF = () => {
+    if (!draftData) return;
+    if (!window.jspdf) {
+      alert("PDF library is still loading. Please try again in a moment.");
+      return;
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    const titleText = draftData.title || "Draft Document";
+    const bodyText = draftData.body || "";
+
+    // 1. Process citations and collect footnotes for the PDF
+    const footnotes = [];
+    const citeRegex = /\[SRC:\s*\\*["'](.*?)\\*["']\]/g;
+    let match;
+    while ((match = citeRegex.exec(bodyText)) !== null) {
+      const quote = match[1].trim();
+      if (quote && !footnotes.includes(quote)) {
+        footnotes.push(quote);
+      }
+    }
+
+    // Clean body text: remove inline [SRC: ...] and change [TO BE FILLED] to blank underscores
+    const cleanBody = bodyText
+      .replace(/\[SRC:\s*\\*["'].*?\\*["']\]/g, "")
+      .replace(/\[TO\s+BE\s+FILLED\]/g, "___________");
+
+    // Margins and wrap width
+    const margin = 20;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const maxLineWidth = pageWidth - (margin * 2);
+
+    // Document Title
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    
+    const splitTitle = doc.splitTextToSize(titleText.toUpperCase(), maxLineWidth);
+    let y = margin + 10;
+    
+    splitTitle.forEach(line => {
+      doc.text(line, margin, y);
+      y += 8;
+    });
+
+    y += 10; // spacing after title
+
+    // Document Body
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    
+    const paragraphs = cleanBody.split("\n");
+    paragraphs.forEach(paragraph => {
+      const splitLines = doc.splitTextToSize(paragraph, maxLineWidth);
+      splitLines.forEach(line => {
+        if (y > 275) {
+          doc.addPage();
+          y = margin + 10;
+        }
+        doc.text(line, margin, y);
+        y += 6;
+      });
+      y += 4; // spacing between paragraphs
+    });
+
+    // 2. Append the footnotes section in the PDF
+    if (footnotes.length > 0) {
+      y += 10;
+      if (y > 260) {
+        doc.addPage();
+        y = margin + 10;
+      }
+      
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text("SOURCES / CITATIONS:", margin, y);
+      y += 8;
+
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(9);
+      footnotes.forEach((quote, idx) => {
+        const footnoteLine = `${idx + 1}. "${quote}"`;
+        const splitLines = doc.splitTextToSize(footnoteLine, maxLineWidth);
+        splitLines.forEach(line => {
+          if (y > 275) {
+            doc.addPage();
+            y = margin + 10;
+          }
+          doc.text(line, margin, y);
+          y += 5;
+        });
+        y += 2;
+      });
+    }
+
+    doc.save(`${titleText.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.pdf`);
+  };
+
+  const renderDraftBody = (bodyText) => {
+    if (!bodyText) return null;
+
+    // Collect quotes from [SRC: "quote"] markers (ignore empty quotes)
+    const citeRegex = /\[SRC:\s*\\*["'](.*?)\\*["']\]/g;
+    const footnotes = [];
+    let match;
+    while ((match = citeRegex.exec(bodyText)) !== null) {
+      const quote = match[1].trim();
+      if (quote && !footnotes.includes(quote)) {
+        footnotes.push(quote);
+      }
+    }
+
+    // Clean body text for clean, continuous inline display
+    const cleanText = bodyText
+      .replace(/\[SRC:\s*\\*["'].*?\\*["']\]/g, "")
+      .replace(/\[TO\s+BE\s+FILLED\]/g, "__________");
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+        <div style={{ whiteSpace: "pre-wrap", fontFamily: "var(--font-sans)", fontSize: "14px", lineHeight: "1.75", color: "var(--text-main)" }}>
+          {cleanText}
+        </div>
+        
+        {footnotes.length > 0 && (
+          <div style={{ marginTop: "32px", paddingTop: "20px", borderTop: "1px solid var(--border-color)" }}>
+            <h4 style={{ fontSize: "13px", fontWeight: "700", color: "var(--gold)", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Sources / Citations
+            </h4>
+            <ol style={{ paddingLeft: "20px", margin: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
+              {footnotes.map((quote, idx) => (
+                <li key={idx} style={{ fontSize: "12.5px", color: "var(--text-muted)", lineHeight: "1.5" }}>
+                  "{quote}"
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const caseDocuments = matter.documents || [];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg-app)", overflow: "hidden" }}>
+      {/* Header */}
+      <header style={{
+        height: 70,
+        background: "var(--bg-card)",
+        borderBottom: "1px solid var(--border-color)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "0 32px",
+        flexShrink: 0
+      }}>
+        {/* Back Link */}
+        <button 
+          onClick={onBack}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            fontSize: 13,
+            fontWeight: 700,
+            color: "var(--primary)",
+            background: "var(--bg-app)",
+            border: "1px solid var(--border-color)",
+            borderRadius: "20px",
+            cursor: "pointer",
+            padding: "8px 16px",
+            transition: "all var(--transition-fast)"
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = "var(--primary-light)";
+            e.currentTarget.style.borderColor = "var(--primary)";
+            e.currentTarget.style.transform = "translateX(-2px)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = "var(--primary)";
+            e.currentTarget.style.borderColor = "var(--border-color)";
+            e.currentTarget.style.transform = "translateX(0)";
+          }}
+        >
+          <ArrowLeft size={15} /> 
+          <span>Back to Case</span>
+        </button>
+
+        {/* Title */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 18, fontWeight: 700, color: "var(--text-main)" }} className="serif">
+            AI Document Drafter
+          </span>
+          <span style={{ fontSize: 10, background: "var(--gold-bg)", color: "var(--gold)", padding: "2px 8px", borderRadius: "10px", fontWeight: 700 }}>
+            Verifiable Drafting
+          </span>
+        </div>
+
+        {/* Action Buttons */}
+        <div style={{ display: "flex", gap: 12 }}>
+          {draftData && (
+            <button 
+              onClick={handleDownloadPDF} 
+              className="btn-primary"
+              style={{ 
+                padding: "8px 16px",
+                background: "var(--gold)",
+                color: "#12241f"
+              }}
+            >
+              <span>Download PDF</span>
+            </button>
+          )}
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <div style={{ display: "flex", flex: 1, overflow: "hidden", width: "100%" }}>
+        {/* Left Sidebar: Controls & Documents */}
+        <div style={{
+          width: "320px",
+          borderRight: "1px solid var(--border-color)",
+          background: "var(--bg-card)",
+          display: "flex",
+          flexDirection: "column",
+          padding: "24px",
+          boxShadow: "var(--shadow-sm)",
+          height: "100%",
+          flexShrink: 0
+        }}>
+          {/* Dropdown at the top */}
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6, textTransform: "uppercase" }}>
+              Document Type
+            </label>
+            <select 
+              className="input-field"
+              value={docType}
+              onChange={(e) => setDocType(e.target.value)}
+              style={{ fontSize: "13px", padding: "10px 12px" }}
+            >
+              <option value="bail_application">Bail Application</option>
+              <option value="legal_notice">Legal Notice</option>
+              <option value="written_reply">Written Reply</option>
+              <option value="vakalatnama">Vakalatnama</option>
+            </select>
+          </div>
+
+          {/* Source documents list */}
+          <div style={{ flex: 1, overflowY: "auto", marginBottom: 20 }}>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 8, textTransform: "uppercase" }}>
+              Source Documents ({caseDocuments.length})
+            </label>
+            
+            {caseDocuments.length === 0 ? (
+              <div style={{ fontSize: 12, color: "var(--text-muted)", padding: "16px", border: "1px dashed var(--border-color)", borderRadius: "var(--radius-md)", textAlign: "center" }}>
+                No documents saved in locker. Upload documents first.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {caseDocuments.map((doc, idx) => {
+                  const docId = doc.id || `mock_${matter.id}_${idx}`;
+                  const isChecked = selectedDocs.includes(docId);
+                  return (
+                    <div 
+                      key={docId}
+                      onClick={() => handleDocCheckboxChange(docId)}
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 10,
+                        padding: "10px 12px",
+                        border: "1px solid",
+                        borderColor: isChecked ? "var(--primary)" : "var(--border-color)",
+                        borderRadius: "var(--radius-md)",
+                        background: isChecked ? "var(--gold-bg)" : "var(--bg-app)",
+                        cursor: "pointer",
+                        transition: "all var(--transition-fast)"
+                      }}
+                    >
+                      <input 
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {}} // handled by parent div onClick
+                        style={{ marginTop: 2, cursor: "pointer" }}
+                      />
+                      <div style={{ flex: 1, overflow: "hidden" }}>
+                        <div style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-main)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {doc.file_name || doc.name}
+                        </div>
+                        <span style={{ fontSize: "10.5px", color: "var(--text-muted)" }}>
+                          {doc.doc_type || "Document"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Draft button at the bottom */}
+          <button 
+            onClick={handleDraft}
+            className="btn-primary"
+            style={{ width: "100%", justifyContent: "center", padding: "12px" }}
+            disabled={isDrafting || caseDocuments.length === 0}
+          >
+            <span>{isDrafting ? "Drafting..." : "Draft Document"}</span>
+          </button>
+        </div>
+
+        {/* Right Main Panel: Generated Draft */}
+        <div style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: "32px",
+          background: "var(--bg-app)",
+          height: "100%",
+          display: "flex",
+          flexDirection: "column"
+        }}>
+          {isDrafting ? (
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
+              <div style={{
+                width: 50, height: 50, borderRadius: "50%",
+                border: "3px solid var(--border-color)",
+                borderTopColor: "var(--primary)",
+                animation: "spin 1s infinite linear"
+              }} />
+              <div style={{ textAlign: "center" }}>
+                <h4 className="serif" style={{ fontSize: 16, color: "var(--text-main)" }}>Generating Legal Draft...</h4>
+                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                  Consulting statutory formats, integrating case facts and citations
+                </p>
+              </div>
+            </div>
+          ) : error ? (
+            <div style={{ background: "var(--alert-red-bg)", border: "1px solid var(--alert-red)", borderRadius: "var(--radius-md)", padding: "16px 20px", display: "flex", gap: 12, color: "var(--alert-red)", marginBottom: 20 }}>
+              <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
+              <div>
+                <h4 style={{ fontSize: 13.5, fontWeight: 700, margin: "0 0 4px 0" }}>Drafting Failed</h4>
+                <p style={{ fontSize: 12.5, margin: 0 }}>{error}</p>
+              </div>
+            </div>
+          ) : !draftData ? (
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", border: "1px dashed var(--border-color)", borderRadius: "var(--radius-lg)", padding: "40px", background: "var(--bg-card)", textAlign: "center" }}>
+              <FileText size={48} color="var(--text-muted)" style={{ marginBottom: 16 }} />
+              <h3 className="serif" style={{ fontSize: 18, color: "var(--text-main)", marginBottom: 6 }}>Ready for Drafting</h3>
+              <p style={{ fontSize: 13, color: "var(--text-muted)", maxWidth: 360, margin: 0 }}>
+                Select source documents on the left, choose your document template, and click "Draft Document" to generate a court-ready draft.
+              </p>
+            </div>
+          ) : (
+            <div style={{
+              background: "var(--bg-card)",
+              border: "1px solid var(--border-color)",
+              borderRadius: "var(--radius-lg)",
+              padding: "40px",
+              boxShadow: "var(--shadow-sm)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 24,
+              flexShrink: 0
+            }}>
+              {/* Draft Heading */}
+              <h2 className="serif" style={{ fontSize: 22, fontWeight: 700, color: "var(--text-main)", borderBottom: "2px solid var(--primary)", paddingBottom: 14, margin: 0, textTransform: "uppercase", letterSpacing: "0.02em" }}>
+                {draftData.title || "Legal Draft"}
+              </h2>
+
+              {/* Draft Body Content */}
+              <div style={{ flex: 1 }}>
+                {renderDraftBody(draftData.body)}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
