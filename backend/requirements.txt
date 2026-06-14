@@ -1,5 +1,6 @@
 fastapi
 uvicorn
+gunicorn
 supabase
 httpx
 python-multipart
@@ -9,4 +10,3 @@ python-dotenv
 pydantic
 numpy
 requests
-sentence-transformers

@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: courtsaarthi
+    runtime: python
+    plan: free
+    buildCommand: "bash build.sh"
+    startCommand: "cd backend && gunicorn main:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120"
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SARVAM_API_KEY
+        sync: false
+      - key: XAI_API_KEY
+        sync: false
+      - key: INDIAN_KANOON_API_KEY
+        sync: false
+      - key: ENABLE_ONLINE_SEARCH
+        value: "true"
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: NODE_VERSION
+        value: "20.11.0"

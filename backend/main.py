@@ -34,16 +34,28 @@ app.include_router(similar_cases_router, prefix="/api/similar-cases")
 async def health():
     return {"status": "ok", "app": "CaseSaarthi"}
 
+# --- Serve React SPA from /static ---
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 if not os.path.exists(static_dir):
     os.makedirs(static_dir)
 
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
+# Serve static assets (JS, CSS, images, etc.)
+app.mount("/assets", StaticFiles(directory=os.path.join(static_dir, "assets") if os.path.exists(os.path.join(static_dir, "assets")) else static_dir), name="assets")
 
-@app.get("/")
-async def root():
-    return FileResponse(os.path.join(static_dir, "index.html"))
+# SPA catch-all: any non-API route serves index.html for client-side routing
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    # Try to serve the exact file first (favicon.svg, etc.)
+    file_path = os.path.join(static_dir, full_path)
+    if full_path and os.path.isfile(file_path):
+        return FileResponse(file_path)
+    # Fallback to index.html for SPA routing
+    index_path = os.path.join(static_dir, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"message": "CourtSaarthi API is running. Frontend not built yet."}
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)

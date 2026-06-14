@@ -2072,7 +2072,7 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
   // Helper function for translating updates via backend API
   const performTranslation = async (text, targetLang) => {
     try {
-      const res = await fetch("http://localhost:8000/api/sarvam/translate", {
+      const res = await fetch("/api/sarvam/translate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2154,7 +2154,7 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
     
     if (tool.id === "draft_builder") {
       try {
-        const res = await fetch(`http://localhost:8000/api/cases/${matter.id}/draft-bail`, {
+        const res = await fetch(`/api/cases/${matter.id}/draft-bail`, {
           method: "POST"
         });
         const json = await res.json();
@@ -2210,7 +2210,7 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
         setSearchCaseError(null);
         setSearchNormalizedQuery(null);
         setSearchExpandedCase(null);
-        const res = await fetch("http://localhost:8000/api/similar-cases/search", {
+        const res = await fetch("/api/similar-cases/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query: searchCaseQuery || "bail", case_type: searchCaseType, include_online: searchIncludeOnline }),
@@ -2259,7 +2259,7 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
         try {
           const formData = new FormData();
           formData.append("file", audioBlob, "recording.wav");
-          const response = await fetch("http://localhost:8000/api/sarvam/stt", {
+          const response = await fetch("/api/sarvam/stt", {
             method: "POST",
             body: formData,
           });
@@ -2952,7 +2952,7 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
                         } else {
                           setIsPlayingAudio(true);
                           try {
-                            const res = await fetch("http://localhost:8000/api/sarvam/tts", {
+                            const res = await fetch("/api/sarvam/tts", {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
                               body: JSON.stringify({
@@ -3599,7 +3599,7 @@ async function analyzeDocument(file) {
   const formData = new FormData();
   formData.append("file", file);
 
-  const res = await fetch("http://localhost:8000/api/analyze", {
+  const res = await fetch("/api/analyze", {
     method: "POST",
     body: formData,
   });
@@ -3680,7 +3680,7 @@ function DocumentAnalysisView({ matter, onBack, onSaveAnalysis }) {
       };
       formData.append("analysis_result", JSON.stringify(payload));
 
-      const res = await fetch(`http://localhost:8000/api/cases/${matter.id}/save-analysis`, {
+      const res = await fetch(`/api/cases/${matter.id}/save-analysis`, {
         method: "POST",
         body: formData
       });
@@ -4277,7 +4277,7 @@ function DocumentDrafterView({ matter, onBack }) {
     setDraftData(null);
 
     try {
-      const res = await fetch("http://localhost:8000/api/draft", {
+      const res = await fetch("/api/draft", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
