@@ -10,47 +10,70 @@ client = OpenAI(
 
 TEMPLATES = {
     "bail_application": {
-        "description": "an Application for Bail under the BNSS, 2023",
-        "structure": (
-            "- Court Title (appropriate Sessions Court or Magistrate Court)\n"
-            "- Accused/Applicant details (Name, Age, Address, Parentage)\n"
-            "- FIR number, Police Station, and Sections of law charged\n"
-            "- Factual background and Arrest Details\n"
-            "- Grounds for Bail (numbered list showing lack of custodial need, cooperativeness, false implication, lack of criminal antecedents if applicable)\n"
-            "- Undertaking to abide by all court conditions and furnish bail bonds\n"
-            "- Prayer for release on bail"
-        )
+        "name": "an Application for Bail under the BNSS, 2023",
+        "structure": "court title (appropriate Sessions Court or Magistrate Court); applicant details; FIR/case number and sections; factual background and arrest details; grounds for bail (numbered list showing lack of custodial need, cooperativeness, false implication, lack of criminal antecedents); undertaking; prayer for release on bail"
     },
+
+    "anticipatory_bail": {
+        "name": "an Application for Anticipatory Bail under Section 482 of the BNSS, 2023",
+        "structure": "court title (Sessions/High Court); applicant details; FIR/case number "
+                     "and sections; apprehension of arrest; brief facts; grounds for "
+                     "anticipatory bail (numbered) — false implication, cooperation, no flight "
+                     "risk, readiness to abide by conditions; undertaking; prayer for "
+                     "pre-arrest bail with conditions"
+    },
+
     "legal_notice": {
-        "description": "a Legal Notice",
-        "structure": (
-            "- Sender details (Client details on whose behalf notice is sent)\n"
-            "- Recipient details (Name and Address of the opposing party)\n"
-            "- Subject line (clear and concise summary of the notice)\n"
-            "- Factual background (numbered list describing the dispute, agreements, or grievances)\n"
-            "- The specific demand (rectification of breach, payments, or performance required)\n"
-            "- Time limit to comply (typically 15 days)\n"
-            "- Consequences of non-compliance (legal proceedings, cost liability)"
-        )
+        "name": "a Legal Notice",
+        "structure": "sender (advocate on behalf of client) and recipient details; subject line; "
+                     "factual background (numbered paragraphs); the specific demand; time to "
+                     "comply (typically 15 days); consequences of non-compliance; signature block"
     },
+
+    "reply_legal_notice": {
+        "name": "a Reply to Legal Notice",
+        "structure": "reference to the notice being replied to (date/sender); without-prejudice "
+                     "clause; para-wise denial/response to each allegation in the original notice "
+                     "(numbered); the client's version of facts; rebuttal of the demand; "
+                     "reservation of rights; signature block"
+    },
+
     "written_reply": {
-        "description": "a Written Statement / Reply to the complaint",
-        "structure": (
-            "- Court Title and Case Details (Parties names, Case number)\n"
-            "- Preliminary objections / submissions (lack of cause of action, jurisdiction, limitation, etc.)\n"
-            "- Para-wise reply to the plaint/complaint (numbered matching paragraphs of the complaint, specifically admitting or denying each allegation)\n"
-            "- Verification paragraph signed by the defendant"
-        )
+        "name": "a Written Statement / Reply to the complaint",
+        "structure": "court title; parties; preliminary objections/submissions; para-wise reply "
+                     "to the plaint/complaint (admit/deny each, numbered); grounds of defence; "
+                     "prayer to dismiss; verification clause; signature"
     },
+
+    "plaint": {
+        "name": "a Plaint (civil suit) under the Code of Civil Procedure",
+        "structure": "court title; plaintiff and defendant details; jurisdiction clause; cause of "
+                     "action with date; facts of the case (numbered paragraphs); the legal basis; "
+                     "limitation clause; valuation and court-fee clause; relief/prayer sought; "
+                     "verification"
+    },
+
+    "affidavit": {
+        "name": "an Affidavit",
+        "structure": "title (in the court/matter); deponent details (name, age, parentage, "
+                     "address); numbered paragraphs stating facts within the deponent's knowledge; "
+                     "statement that contents are true; verification clause with place and date; "
+                     "signature of deponent and identification block"
+    },
+
+    "adjournment_application": {
+        "name": "an Application for Adjournment",
+        "structure": "court title; case number and parties; the date fixed; the reason adjournment "
+                     "is sought (numbered, brief); statement that it is not for delay; prayer to "
+                     "adjourn to a later date; signature of counsel"
+    },
+
     "vakalatnama": {
-        "description": "a Vakalatnama (Power of Attorney appointing advocate)",
-        "structure": (
-            "- Court Title and Case Details\n"
-            "- Client authority / appointment declaration (appointing {counsel_name} and associates as advocate)\n"
-            "- Authority details (power to file applications, plead, sign briefs, receive payments, withdraw cases)\n"
-            "- Signature of the Client / Appointor\n"
-            "- Acceptance signature of the Advocate"
-        )
+        "name": "a Vakalatnama",
+        "structure": "court title; case number and parties; appointment clause naming the "
+                     "advocate {counsel_name} to appear on behalf of the party; standard authority clauses "
+                     "(to act, plead, compromise, receive documents); acceptance by advocate; "
+                     "signature of party and advocate; date"
     },
 }
 
@@ -121,28 +144,22 @@ def generate_draft(doc_type, source_doc_ids):
             "citations": [],
         }
 
-    template = TEMPLATES.get(doc_type)
-    if isinstance(template, dict):
-        template_desc = template["description"]
-        structure_desc = template["structure"]
-    else:
-        template_desc = "a legal document"
-        structure_desc = "Standard Indian court/legal format"
+    template = TEMPLATES.get(doc_type, {"name": "a legal document", "structure": "standard legal format"})
+    template_desc = template["name"]
+    template_structure = template["structure"]
 
     # Inject lawyer name dynamically into vakalatnama or handle placeholder
     if doc_type == "vakalatnama":
         lawyer_str = lawyer_name if lawyer_name else "___________"
-        structure_desc = structure_desc.replace("{counsel_name}", lawyer_str)
+        template_structure = template_structure.replace("{counsel_name}", lawyer_str)
 
     prompt = (
         f"You are assisting an Indian lawyer. Draft {template_desc} based ONLY on the "
-        f"facts in the source below. Use proper Indian court/legal format and follow this exact required structure:\n"
-        f"{structure_desc}\n\n"
-        f"CRITICAL: After every factual claim taken from the source, add a citation in the "
-        f'form [SRC: "<exact quote from source>"]. Never invent facts. If a standard part '
-        f"of the document needs a fact not in the source, write [TO BE FILLED].\n\n"
-        f'Return ONLY valid JSON: {{"title": "...", "body": "...full draft with inline '
-        f'[SRC: ...] citations and [TO BE FILLED] placeholders..."}}\n\n'
+        f"facts in the source below. Follow this exact structure: {template_structure}.\n\n"
+        f"CRITICAL: cite every factual claim with [SRC: \"exact quote\"]. Where a required "
+        f"field isn't in the source, write a blank line ___________ for the lawyer to fill — "
+        f"never invent facts.\n\n"
+        f'Return ONLY valid JSON in the format: {{"title": "...", "body": "..."}}\n\n'
         f"SOURCE:\n{source}"
     )
 

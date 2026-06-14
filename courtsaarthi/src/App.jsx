@@ -4375,10 +4375,19 @@ function DocumentDrafterView({ matter, onBack }) {
               onChange={(e) => setDocType(e.target.value)}
               style={{ fontSize: "13px", padding: "10px 12px" }}
             >
-              <option value="bail_application">Bail Application</option>
-              <option value="legal_notice">Legal Notice</option>
-              <option value="written_reply">Written Reply</option>
-              <option value="vakalatnama">Vakalatnama</option>
+              {[
+                { value: "bail_application", label: "Bail Application" },
+                { value: "anticipatory_bail", label: "Anticipatory Bail Application" },
+                { value: "legal_notice", label: "Legal Notice" },
+                { value: "reply_legal_notice", label: "Reply to Legal Notice" },
+                { value: "written_reply", label: "Written Statement / Reply" },
+                { value: "plaint", label: "Plaint (Civil Suit)" },
+                { value: "affidavit", label: "Affidavit" },
+                { value: "adjournment_application", label: "Adjournment Application" },
+                { value: "vakalatnama", label: "Vakalatnama" },
+              ].map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
             </select>
           </div>
 
