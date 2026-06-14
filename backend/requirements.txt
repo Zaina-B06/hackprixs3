@@ -11,3 +11,4 @@ pydantic
 numpy
 requests
 pdfplumber
+python-dateutil
