@@ -11,7 +11,7 @@ client = OpenAI(
 TEMPLATES = {
     "bail_application": {
         "name": "an Application for Bail under the BNSS, 2023",
-        "structure": "court title (appropriate Sessions Court or Magistrate Court); applicant details; FIR/case number and sections; factual background and arrest details; grounds for bail (numbered list showing lack of custodial need, cooperativeness, false implication, lack of criminal antecedents); undertaking; prayer for release on bail"
+        "structure": "court title (appropriate Sessions/Magistrate Court); applicant details; FIR/case number and sections of law; arrest details; grounds for bail (numbered list showing lack of custodial need, cooperation, no flight risk, etc.); undertaking to abide by conditions; prayer for release on bail with conditions"
     },
 
     "anticipatory_bail": {
@@ -138,7 +138,6 @@ def generate_draft(doc_type, source_doc_ids):
     if not source.strip():
         # honest failure instead of a [TO BE FILLED] skeleton
         return {
-            "title": doc_type,
             "body": "No saved analysis found for the selected document(s). "
                     "Please run document analysis and click 'Save to case' first.",
             "citations": [],
@@ -156,10 +155,13 @@ def generate_draft(doc_type, source_doc_ids):
     prompt = (
         f"You are assisting an Indian lawyer. Draft {template_desc} based ONLY on the "
         f"facts in the source below. Follow this exact structure: {template_structure}.\n\n"
-        f"CRITICAL: cite every factual claim with [SRC: \"exact quote\"]. Where a required "
-        f"field isn't in the source, write a blank line ___________ for the lawyer to fill — "
-        f"never invent facts.\n\n"
-        f'Return ONLY valid JSON in the format: {{"title": "...", "body": "..."}}\n\n'
+        f"CRITICAL RULES FOR CITATIONS AND MISSING FACTS:\n"
+        f"1. A [SRC: \"...\"] marker must contain ONLY a verbatim quote copied exactly from the source text. "
+        f"It must never contain explanations, descriptions, or phrases like 'no quote available' or 'not mentioned in source.'\n"
+        f"2. If a fact is NOT in the source, write ONLY a blank line ___________ for the lawyer to fill in — "
+        f"do NOT add any [SRC: ...] marker next to it at all.\n"
+        f"3. Citations are only for facts that genuinely come from the source, with the actual verbatim quote.\n\n"
+        f'Return ONLY valid JSON: {{"title": "...", "body": "...full draft with inline [SRC: ...] citations and ___________ placeholders..."}}\n\n'
         f"SOURCE:\n{source}"
     )
 
@@ -192,6 +194,11 @@ def generate_draft(doc_type, source_doc_ids):
                 except Exception:
                     pass
         break
+
+    # remove any [SRC: ...] that doesn't contain a real quote (no quotation marks = not a real citation)
+    draft["body"] = re.sub(r'\[SRC:\s*(?!")[^\]]*\]', '', draft["body"])
+    # also remove empty-quote citations
+    draft["body"] = re.sub(r'\[SRC:\s*""\s*\]', '', draft["body"])
 
     # verify each citation exists in the source (your trust mechanism)
     cites = re.findall(r'\[SRC:\s*"([^"]+)"\]', draft.get("body", ""))

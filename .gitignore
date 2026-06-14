@@ -16,3 +16,12 @@ backend/test_audio.wav
 .DS_Store
 *.suo
 *.sw?
+
+# Catch .env anywhere (safety)
+.env
+**/.env
+*.env
+
+# Catch node_modules and pycache anywhere (safety)
+**/node_modules/
+**/__pycache__/

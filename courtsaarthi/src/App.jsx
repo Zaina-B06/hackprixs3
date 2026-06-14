@@ -4159,7 +4159,7 @@ function DocumentDrafterView({ matter, onBack }) {
 
     // Clean body text: remove inline [SRC: ...] and change [TO BE FILLED] to blank underscores
     const cleanBody = bodyText
-      .replace(/\[SRC:\s*\\*["'].*?\\*["']\]/g, "")
+      .replace(/\[SRC:\s*[^\]]*\]/g, "")
       .replace(/\[TO\s+BE\s+FILLED\]/g, "___________");
 
     // Margins and wrap width
@@ -4248,7 +4248,7 @@ function DocumentDrafterView({ matter, onBack }) {
 
     // Clean body text for clean, continuous inline display
     const cleanText = bodyText
-      .replace(/\[SRC:\s*\\*["'].*?\\*["']\]/g, "")
+      .replace(/\[SRC:\s*[^\]]*\]/g, "")
       .replace(/\[TO\s+BE\s+FILLED\]/g, "__________");
 
     return (
@@ -4384,9 +4384,9 @@ function DocumentDrafterView({ matter, onBack }) {
                 { value: "plaint", label: "Plaint (Civil Suit)" },
                 { value: "affidavit", label: "Affidavit" },
                 { value: "adjournment_application", label: "Adjournment Application" },
-                { value: "vakalatnama", label: "Vakalatnama" },
-              ].map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
+                { value: "vakalatnama", label: "Vakalatnama" }
+              ].map(dt => (
+                <option key={dt.value} value={dt.value}>{dt.label}</option>
               ))}
             </select>
           </div>
