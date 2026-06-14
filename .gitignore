@@ -1,0 +1,18 @@
+# Frontend ignores
+courtsaarthi/node_modules
+courtsaarthi/dist
+courtsaarthi/dist-ssr
+courtsaarthi/*.local
+
+# Backend ignores
+backend/.env
+backend/__pycache__/
+backend/**/*.pyc
+backend/test_audio.wav
+
+# Editor ignores
+.vscode/
+.idea/
+.DS_Store
+*.suo
+*.sw?
