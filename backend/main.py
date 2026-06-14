@@ -10,6 +10,7 @@ from routers.hearings import router as hearings_router
 from routers.analyze import router as analyze_router
 from routers.draft import router as draft_router
 from routers.sarvam import router as sarvam_router
+from routers.similar_cases import router as similar_cases_router
 
 app = FastAPI(title="CaseSaarthi API")
 
@@ -27,6 +28,7 @@ app.include_router(hearings_router, prefix="/api")
 app.include_router(analyze_router, prefix="/api")
 app.include_router(draft_router, prefix="/api")
 app.include_router(sarvam_router, prefix="/api")
+app.include_router(similar_cases_router, prefix="/api/similar-cases")
 
 @app.get("/api/health")
 async def health():

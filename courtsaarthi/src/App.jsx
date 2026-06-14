@@ -2048,6 +2048,12 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
 
   // Search Past Cases States
   const [searchCaseQuery, setSearchCaseQuery] = useState("");
+  const [searchCaseResults, setSearchCaseResults] = useState([]);
+  const [searchCaseError, setSearchCaseError] = useState(null);
+  const [searchCaseType, setSearchCaseType] = useState("All");
+  const [searchIncludeOnline, setSearchIncludeOnline] = useState(true);
+  const [searchNormalizedQuery, setSearchNormalizedQuery] = useState(null);
+  const [searchExpandedCase, setSearchExpandedCase] = useState(null);
 
   // Smart Hearing Entry States
   const [smartText, setSmartText] = useState("");
@@ -2133,6 +2139,12 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
       setSmartExtracted(null);
       setSmartDraftedMessage("");
     }
+    if (tool.id === "search_cases") {
+      setSearchCaseResults([]);
+      setSearchCaseError(null);
+      setSearchNormalizedQuery(null);
+      setSearchExpandedCase(null);
+    }
   }, [tool]);
 
   // Run AI Simulation
@@ -2189,6 +2201,34 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
     if (tool.id === "client") {
       await performTranslation(clientUpdateEnglish, clientLanguage);
       setToolState("complete");
+      return;
+    }
+
+    if (tool.id === "search_cases") {
+      try {
+        setSearchCaseResults([]);
+        setSearchCaseError(null);
+        setSearchNormalizedQuery(null);
+        setSearchExpandedCase(null);
+        const res = await fetch("http://localhost:8000/api/similar-cases/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: searchCaseQuery || "bail", case_type: searchCaseType, include_online: searchIncludeOnline }),
+        });
+        const json = await res.json();
+        if (json.success && json.results) {
+          const filtered = json.results.filter(r => r.similarity_score > 0).slice(0, 10);
+          setSearchCaseResults(filtered);
+          if (json.normalized_query) setSearchNormalizedQuery(json.normalized_query);
+          setToolState("complete");
+        } else {
+          throw new Error("No results returned");
+        }
+      } catch (err) {
+        console.error("Similar case search failed:", err);
+        setSearchCaseError(err.message || "Failed to search cases. Please ensure the backend is running.");
+        setToolState("idle");
+      }
       return;
     }
   };
@@ -2366,19 +2406,50 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
 
             {tool.id === "search_cases" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {/* Case Type Filter */}
                 <div>
-                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>Search terms for past cases</label>
-                  <input 
-                    type="text" 
-                    className="input-field" 
-                    placeholder="e.g. default bail chargesheet delay 90 days"
-                    value={searchCaseQuery} 
-                    onChange={(e) => setSearchCaseQuery(e.target.value)} 
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.5px" }}>Case Type</label>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {["Civil", "Criminal", "All"].map(ct => (
+                      <button key={ct} type="button" onClick={() => setSearchCaseType(ct)} style={{
+                        padding: "5px 14px", borderRadius: "20px", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                        border: searchCaseType === ct ? "1.5px solid var(--primary)" : "1.5px solid var(--border-color)",
+                        background: searchCaseType === ct ? "var(--primary)" : "transparent",
+                        color: searchCaseType === ct ? "#fff" : "var(--text-main)",
+                        transition: "all 0.15s ease"
+                      }}>{ct}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Include Online Search */}
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: "var(--text-main)" }}>
+                  <input type="checkbox" checked={searchIncludeOnline} onChange={e => setSearchIncludeOnline(e.target.checked)} style={{ accentColor: "var(--primary)", width: 15, height: 15 }} />
+                  Include Online Search (Indian Kanoon)
+                </label>
+
+                {/* Search Query */}
+                <div>
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.5px" }}>Search Query</label>
+                  <textarea
+                    className="input-field"
+                    rows={3}
+                    placeholder="e.g. cyber crime UPI fraud, or bail chargesheet delay 90 days"
+                    value={searchCaseQuery}
+                    onChange={(e) => setSearchCaseQuery(e.target.value)}
+                    style={{ fontSize: 12.5, resize: "vertical" }}
                   />
                 </div>
+
                 <button type="button" className="btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={handleLaunchTool}>
-                  Search cases
+                  Find Similar Cases
                 </button>
+
+                {searchCaseError && (
+                  <div style={{ background: "rgba(229,62,62,0.08)", border: "1px solid rgba(229,62,62,0.2)", borderRadius: 8, padding: "8px 12px", fontSize: 11, color: "#e53e3e" }}>
+                    {searchCaseError}
+                  </div>
+                )}
               </div>
             )}
 
@@ -2702,47 +2773,145 @@ function ToolPanel({ tool, matter, onClose, onAddDeadline, onAddNote, onSaveExtr
 
             {tool.id === "search_cases" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {/* Results Header */}
                 <div style={{
                   background: "var(--alert-green-bg)", color: "var(--alert-green)", border: "1px solid rgba(41,96,67,0.15)",
                   padding: "10px 14px", borderRadius: "8px", fontSize: 12, display: "flex", alignItems: "center", gap: 8, fontWeight: 600
                 }}>
-                  <CheckCircle2 size={16} /> Found 2 similar cases
+                  <CheckCircle2 size={16} /> Found {searchCaseResults.length} similar case{searchCaseResults.length !== 1 ? "s" : ""}
+                  <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 400, opacity: 0.8 }}>ranked by hybrid score</span>
                 </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  <div style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "12px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                      <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-main)" }}>State of Maharashtra vs. Kapil (2021)</span>
-                      <span style={{ fontSize: 9, textTransform: "uppercase", padding: "2px 6px", borderRadius: "10px", background: "var(--alert-green-bg)", color: "var(--alert-green)", fontWeight: 700 }}>
-                        Bail Granted
-                      </span>
-                    </div>
-                    <p style={{ fontSize: 11.5, color: "var(--text-muted)", margin: "0 0 6px 0" }}>High Court of Bombay</p>
-                    <p style={{ fontSize: 12, color: "var(--text-main)", margin: 0 }}>
-                      <b>Outcome:</b> The court ruled that if the investigation is not finished in 90 days, the accused has an absolute right to default bail.
-                    </p>
+                {/* Normalized Query */}
+                {searchNormalizedQuery && (
+                  <div style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "10px 12px" }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Normalized Query</span>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-main)", margin: "4px 0 2px 0" }}>{searchNormalizedQuery.matter_type || "General"}</p>
+                    <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>{searchNormalizedQuery.legal_issue || ""}</p>
                   </div>
+                )}
 
-                  <div style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "12px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                      <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-main)" }}>Ramesh vs. State (2018)</span>
-                      <span style={{ fontSize: 9, textTransform: "uppercase", padding: "2px 6px", borderRadius: "10px", background: "var(--alert-green-bg)", color: "var(--alert-green)", fontWeight: 700 }}>
-                        Bail Granted
-                      </span>
-                    </div>
-                    <p style={{ fontSize: 11.5, color: "var(--text-muted)", margin: "0 0 6px 0" }}>Supreme Court of India</p>
-                    <p style={{ fontSize: 12, color: "var(--text-main)", margin: 0 }}>
-                      <b>Outcome:</b> Confirmed that default bail cannot be delayed once the statutory period is complete and no chargesheet has been filed.
-                    </p>
+                {searchCaseResults.length === 0 && (
+                  <p style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", padding: "20px 0" }}>
+                    No matching cases found. Try different search terms.
+                  </p>
+                )}
+
+                {/* Expanded Case Detail View */}
+                {searchExpandedCase && (
+                  <div style={{ background: "var(--bg-card)", border: "2px solid var(--primary)", borderRadius: "var(--radius-lg)", padding: "16px", position: "relative" }}>
+                    <button type="button" onClick={() => setSearchExpandedCase(null)} style={{
+                      position: "absolute", top: 8, right: 10, background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--text-muted)", fontWeight: 700
+                    }}>✕</button>
+                    <h4 style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)", margin: "0 0 4px 0", paddingRight: 24 }}>{searchExpandedCase.case_name}</h4>
+                    <p style={{ fontSize: 11.5, color: "var(--text-muted)", margin: "0 0 12px 0" }}>{searchExpandedCase.court}{searchExpandedCase.year ? ` · ${searchExpandedCase.year}` : ""} · {searchExpandedCase.case_type || ""}</p>
+                    {searchExpandedCase.matched_issue && <div style={{ marginBottom: 10 }}><span style={{ fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", letterSpacing: "0.5px" }}>Matched Issue</span><p style={{ fontSize: 12, color: "var(--text-main)", margin: "3px 0 0 0" }}>{searchExpandedCase.matched_issue}</p></div>}
+                    {searchExpandedCase.judgment && <div style={{ marginBottom: 10 }}><span style={{ fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", letterSpacing: "0.5px" }}>Judgment</span><p style={{ fontSize: 12, color: "var(--text-main)", margin: "3px 0 0 0" }}>{searchExpandedCase.judgment}</p></div>}
+                    {searchExpandedCase.why_similar && <div style={{ marginBottom: 10 }}><span style={{ fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", letterSpacing: "0.5px" }}>Why Similar</span><p style={{ fontSize: 12, color: "var(--primary)", margin: "3px 0 0 0" }}>{searchExpandedCase.why_similar}</p></div>}
+                    {searchExpandedCase.citation && <div><span style={{ fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", letterSpacing: "0.5px" }}>Citation</span><p style={{ fontSize: 12, color: "var(--text-main)", margin: "3px 0 0 0" }}>{searchExpandedCase.citation}</p></div>}
                   </div>
+                )}
+
+                {/* Result Cards */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 480, overflowY: "auto" }}>
+                  {searchCaseResults.map((caseItem, idx) => (
+                    <div key={caseItem.case_id || idx} style={{ background: "var(--bg-app)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "14px", position: "relative" }}>
+
+                      {/* Top Badge Row */}
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 8 }}>
+                        <span style={{ fontSize: 9, padding: "2px 8px", borderRadius: "10px", background: caseItem.similarity_score >= 40 ? "var(--alert-green-bg)" : "rgba(255,193,7,0.12)", color: caseItem.similarity_score >= 40 ? "var(--alert-green)" : "#b8860b", fontWeight: 700 }}>
+                          {caseItem.similarity_score}% similar
+                        </span>
+                        <span style={{ fontSize: 9, padding: "2px 8px", borderRadius: "10px", background: caseItem.verification_status === "Verified" || caseItem.verification_status === "Source Available" ? "var(--alert-green-bg)" : "rgba(200,200,200,0.15)", color: caseItem.verification_status === "Verified" || caseItem.verification_status === "Source Available" ? "var(--alert-green)" : "var(--text-muted)", fontWeight: 600 }}>
+                          {caseItem.verification_status || "Unverified"}
+                        </span>
+                        <span style={{ fontSize: 9, padding: "2px 8px", borderRadius: "10px", background: "rgba(30,30,40,0.7)", color: "#ccc", fontWeight: 500 }}>
+                          {caseItem.source_name || "Local DB"}
+                        </span>
+                        <span style={{ fontSize: 9, padding: "2px 8px", borderRadius: "10px", background: "rgba(30,30,40,0.7)", color: "#aaa", fontWeight: 500 }}>
+                          {caseItem.data_origin || "local"}
+                        </span>
+                      </div>
+
+                      {/* Case Name + Match Circle */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                        <div style={{ flex: 1 }}>
+                          <h4 style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text-main)", margin: "0 0 3px 0" }}>{caseItem.case_name}</h4>
+                          <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>
+                            {caseItem.court}{caseItem.year ? ` · ${caseItem.year}` : ""}{caseItem.case_type ? ` · ${caseItem.case_type}` : ""}
+                          </p>
+                        </div>
+                        <div style={{
+                          width: 48, height: 48, borderRadius: "50%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                          border: `2.5px solid ${caseItem.similarity_score >= 40 ? "var(--alert-green)" : "#b8860b"}`, flexShrink: 0
+                        }}>
+                          <span style={{ fontSize: 8, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", lineHeight: 1 }}>MATCH</span>
+                          <span style={{ fontSize: 14, fontWeight: 800, color: caseItem.similarity_score >= 40 ? "var(--alert-green)" : "#b8860b", lineHeight: 1 }}>{caseItem.similarity_score}%</span>
+                        </div>
+                      </div>
+
+                      {/* 2x2 Info Grid */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 10 }}>
+                        <div style={{ background: "var(--bg-card)", borderRadius: 6, padding: "8px 10px", border: "1px solid var(--border-color)" }}>
+                          <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", letterSpacing: "0.5px" }}>Matched Issue</span>
+                          <p style={{ fontSize: 11, color: "var(--text-main)", margin: "3px 0 0 0", lineHeight: 1.35 }}>
+                            {(caseItem.matched_issue || "").length > 80 ? caseItem.matched_issue.slice(0, 80) + "…" : (caseItem.matched_issue || "—")}
+                          </p>
+                        </div>
+                        <div style={{ background: "var(--bg-card)", borderRadius: 6, padding: "8px 10px", border: "1px solid var(--border-color)" }}>
+                          <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", letterSpacing: "0.5px" }}>Citation</span>
+                          <p style={{ fontSize: 11, color: "var(--text-main)", margin: "3px 0 0 0", lineHeight: 1.35 }}>{caseItem.citation || "—"}</p>
+                        </div>
+                        <div style={{ background: "var(--bg-card)", borderRadius: 6, padding: "8px 10px", border: "1px solid var(--border-color)" }}>
+                          <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", letterSpacing: "0.5px" }}>Why Similar</span>
+                          <p style={{ fontSize: 11, color: "var(--primary)", margin: "3px 0 0 0", lineHeight: 1.35 }}>
+                            {(caseItem.why_similar || "").length > 80 ? caseItem.why_similar.slice(0, 80) + "…" : (caseItem.why_similar || "—")}
+                          </p>
+                        </div>
+                        <div style={{ background: "var(--bg-card)", borderRadius: 6, padding: "8px 10px", border: "1px solid var(--border-color)" }}>
+                          <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", letterSpacing: "0.5px" }}>Judgment</span>
+                          <p style={{ fontSize: 11, color: "var(--text-main)", margin: "3px 0 0 0", lineHeight: 1.35 }}>
+                            {(caseItem.judgment || "").length > 80 ? caseItem.judgment.slice(0, 80) + "…" : (caseItem.judgment || "—")}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+                        {caseItem.source_url && (
+                          <a href={caseItem.source_url} target="_blank" rel="noopener noreferrer" style={{
+                            padding: "5px 12px", borderRadius: 6, fontSize: 10.5, fontWeight: 700, cursor: "pointer",
+                            background: "var(--bg-sidebar)", color: "#fff", border: "none", textDecoration: "none", display: "inline-block"
+                          }}>Open Source</a>
+                        )}
+                        <button type="button" onClick={() => {
+                          onAddNote(`Saved research: ${caseItem.case_name}${caseItem.year ? ` (${caseItem.year})` : ""} — ${caseItem.court || ""} — Citation: ${caseItem.citation || "N/A"} — Judgment: ${caseItem.judgment || "N/A"}`);
+                        }} style={{
+                          padding: "5px 12px", borderRadius: 6, fontSize: 10.5, fontWeight: 600, cursor: "pointer",
+                          background: "transparent", color: "var(--text-main)", border: "1.5px solid var(--border-color)"
+                        }}>Save to Research</button>
+                        <button type="button" onClick={() => setSearchExpandedCase(searchExpandedCase?.case_id === caseItem.case_id ? null : caseItem)} style={{
+                          padding: "5px 12px", borderRadius: 6, fontSize: 10.5, fontWeight: 600, cursor: "pointer",
+                          background: "transparent", color: "var(--primary)", border: "1.5px solid var(--primary)"
+                        }}>View Details</button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
-                <button type="button" className="btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={() => {
-                  onAddNote(`AI Case Search: Found similar cases for "${searchCaseQuery || "default bail"}". key precedent: State vs. Kapil (2021) Bombay HC. Outcome: Bail is a right if chargesheet is delayed.`);
-                  onClose();
-                }}>
-                  Save Search Notes to Case File
-                </button>
+                {/* Bottom Actions */}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button type="button" className="btn-secondary" style={{ flex: 1, padding: "8px" }} onClick={() => setToolState("idle")}>
+                    New Search
+                  </button>
+                  <button type="button" className="btn-primary" style={{ flex: 1, justifyContent: "center" }} onClick={() => {
+                    const topCases = searchCaseResults.slice(0, 3).map(c => `${c.case_name}${c.year ? ` (${c.year})` : ""} — ${c.court || ""} — ${c.judgment || ""}`.trim()).join("\n");
+                    onAddNote(`AI Case Search: Found ${searchCaseResults.length} similar cases for "${searchCaseQuery}".\n\nTop results:\n${topCases}`);
+                    onClose();
+                  }}>
+                    Save All to Case File
+                  </button>
+                </div>
               </div>
             )}
 

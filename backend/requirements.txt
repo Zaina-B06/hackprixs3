@@ -7,3 +7,6 @@ openai
 sarvamai
 python-dotenv
 pydantic
+numpy
+requests
+sentence-transformers
